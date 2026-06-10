@@ -719,9 +719,7 @@ Codex pet workflow:
     items: [],
     metadata: [],
     editItemId: null,
-    rebuildTimer: null,
-    busyTimer: null,
-    busyCount: 0
+    rebuildTimer: null
   };
 
   const els = {
@@ -787,18 +785,12 @@ Codex pet workflow:
   }
 
   function setBusy(on) {
-    if (on) {
-      state.busyCount++;
-      els.canvasShell.classList.add("busy");
-      return;
-    }
-    state.busyCount = Math.max(0, state.busyCount - 1);
-    if (state.busyCount === 0) els.canvasShell.classList.remove("busy");
+    els.canvasShell.classList.toggle("busy", !!on);
   }
 
   function scheduleRebuild(delay = 120) {
-    setBusy(true);
     clearTimeout(state.rebuildTimer);
+    setBusy(true);
     state.rebuildTimer = setTimeout(() => {
       requestAnimationFrame(() => {
         try {
@@ -808,12 +800,6 @@ Codex pet workflow:
         }
       });
     }, delay);
-  }
-
-  function flashBusy(delay = 160) {
-    setBusy(true);
-    clearTimeout(state.busyTimer);
-    state.busyTimer = setTimeout(() => setBusy(false), delay);
   }
 
   function setupEvents() {
@@ -843,7 +829,7 @@ Codex pet workflow:
 
     els.exportFormat.addEventListener("change", () => {
       renderList();
-      scheduleRebuild(120);
+      updateStats();
     });
 
     els.tolerance.addEventListener("input", () => {
@@ -853,11 +839,6 @@ Codex pet workflow:
 
     els.quality.addEventListener("input", () => {
       els.qualityLabel.textContent = Number(els.quality.value).toFixed(2);
-      flashBusy();
-    });
-
-    ["petId", "petName", "petDescription"].forEach(id => {
-      els[id].addEventListener("input", () => flashBusy());
     });
 
     els.rebuildBtn.addEventListener("click", () => scheduleRebuild(0));
@@ -1098,14 +1079,10 @@ Codex pet workflow:
       return;
     }
 
-    if (els.exportFormat.value === "codex/zip") {
-      buildCodexAtlasPreview();
-    } else {
-      const processed = state.items.map(processBaseItem);
-      const normalized = normalizeItems(processed);
-      const transformed = normalized.map(applyItemTransform);
-      buildNormalAtlas(transformed);
-    }
+    const processed = state.items.map(processBaseItem);
+    const normalized = normalizeItems(processed);
+    const transformed = normalized.map(applyItemTransform);
+    buildNormalAtlas(transformed);
 
     els.downloadBtn.disabled = false;
     els.downloadJsonBtn.disabled = false;
@@ -1273,21 +1250,6 @@ Codex pet workflow:
     log(`Built atlas. ${cleanedCount} image${cleanedCount === 1 ? "" : "s"} had checker-like pixels removed.`, "ok");
   }
 
-  function buildCodexAtlasPreview() {
-    buildCodexAtlasIntoCanvas(els.canvas);
-    updateStats();
-
-    const missing = Math.max(0, CODEX_ROWS - state.items.length);
-    const extra = Math.max(0, state.items.length - CODEX_ROWS);
-    if (missing) {
-      log(`Codex preview built with ${missing} transparent missing row${missing === 1 ? "" : "s"}.`, "warn");
-    } else if (extra) {
-      log(`Codex preview built. ${extra} extra strip${extra === 1 ? "" : "s"} ignored by Codex export.`, "warn");
-    } else {
-      log("Codex preview built: 1536×1872, 8×9 cells, pet package ready.", "ok");
-    }
-  }
-
   function buildCodexAtlasIntoCanvas(targetCanvas) {
     targetCanvas.width = CODEX_WIDTH;
     targetCanvas.height = CODEX_HEIGHT;
@@ -1354,6 +1316,47 @@ Codex pet workflow:
         offsetY: item.offsetY
       });
     }
+  }
+
+  function buildCodexMetadata() {
+    const metadata = [];
+
+    for (let row = 0; row < CODEX_ROWS; row++) {
+      const item = state.items[row];
+      const codexState = CODEX_STATES[row];
+
+      if (!item) {
+        metadata.push({
+          row,
+          state: codexState.name,
+          label: codexState.label,
+          usedFrames: codexState.frames,
+          source: null,
+          transparent: true
+        });
+        continue;
+      }
+
+      metadata.push({
+        row,
+        state: codexState.name,
+        label: codexState.label,
+        usedFrames: codexState.frames,
+        sourceFrames: clampInt(item.sourceFrames, 1, 8, 8),
+        source: item.name,
+        x: 0,
+        y: row * CODEX_FRAME_H,
+        width: CODEX_WIDTH,
+        height: CODEX_FRAME_H,
+        cellWidth: CODEX_FRAME_W,
+        cellHeight: CODEX_FRAME_H,
+        scalePct: item.scalePct,
+        offsetX: item.offsetX,
+        offsetY: item.offsetY
+      });
+    }
+
+    return metadata;
   }
 
   function makeCleanCanvasFromBitmap(bitmap) {
@@ -1734,15 +1737,17 @@ Codex pet workflow:
   }
 
   function downloadMetadata() {
+    const isCodex = els.exportFormat.value === "codex/zip";
+    const metadata = isCodex ? buildCodexMetadata() : state.metadata;
     const blob = new Blob([JSON.stringify({
       atlas: {
         width: els.canvas.width,
         height: els.canvas.height,
-        layout: els.exportFormat.value === "codex/zip" ? "codex-pet" : els.layoutMode.value,
+        layout: isCodex ? "codex-pet" : els.layoutMode.value,
         exportFormat: els.exportFormat.value,
         generatedAt: new Date().toISOString()
       },
-      sprites: state.metadata
+      sprites: metadata
     }, null, 2)], { type: "application/json" });
 
     const url = URL.createObjectURL(blob);
