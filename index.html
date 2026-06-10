@@ -2172,16 +2172,22 @@ Codex pet workflow:
           const cleaned = makeCleanCanvasFromBitmap(item.bitmap);
           const padding = calculateCodexInnerPadding(cleaned, boxes);
           const paddingRatio = padding / Math.min(CODEX_FRAME_W, CODEX_FRAME_H);
-          const sx = item.processedWidth / item.width;
-          const sy = item.processedHeight / item.height;
+          const marginLeft = item.offsetX > 0 ? item.offsetX : 0;
+          const marginRight = item.offsetX < 0 ? -item.offsetX : 0;
+          const marginTop = item.offsetY > 0 ? item.offsetY : 0;
+          const marginBottom = item.offsetY < 0 ? -item.offsetY : 0;
+          const scaledW = Math.max(1, item.processedWidth - marginLeft - marginRight);
+          const scaledH = Math.max(1, item.processedHeight - marginTop - marginBottom);
+          const sx = scaledW / item.width;
+          const sy = scaledH / item.height;
 
           targetCtx.save();
           targetCtx.font = "12px ui-sans-serif, system-ui, sans-serif";
           targetCtx.textBaseline = "top";
 
           boxes.forEach((box, index) => {
-            const x = drawX + box.x * sx;
-            const y = drawY + box.y * sy;
+            const x = drawX + marginLeft + box.x * sx;
+            const y = drawY + marginTop + box.y * sy;
             const w = box.w * sx;
             const h = box.h * sy;
             const inset = Math.max(0, Math.min(w, h) * paddingRatio);
