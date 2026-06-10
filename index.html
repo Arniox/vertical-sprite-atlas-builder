@@ -1309,6 +1309,27 @@ Codex pet workflow:
             const item = getEditingItem();
             if (!item) return;
             redetectItemCells(item);
+            state.selectedCellIndex = null;
+            populateItemDialog(item);
+            renderList();
+            scheduleRebuild(120);
+          });
+
+          els.addCellBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            const item = getEditingItem();
+            if (!item) return;
+            addEditableCell(item);
+            populateItemDialog(item);
+            renderList();
+            scheduleRebuild(120);
+          });
+
+          els.deleteCellBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            const item = getEditingItem();
+            if (!item) return;
+            deleteSelectedCell(item);
             populateItemDialog(item);
             renderList();
             scheduleRebuild(120);
