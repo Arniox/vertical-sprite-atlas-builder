@@ -1,781 +1,956 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sprite Atlas Builder</title>
-<meta name="description" content="Browser-only sprite strip atlas builder with Codex pet export support." />
-<style>
-  :root {
-    --bg: #101218;
-    --panel: #191d27;
-    --panel2: #222838;
-    --panel3: #10131b;
-    --text: #eef2fb;
-    --muted: #aeb7c9;
-    --line: #343b4e;
-    --accent: #7cb7ff;
-    --accent2: #8ee6a5;
-    --danger: #ff7c7c;
-    --warn: #ffd89b;
-    --shadow: rgba(0, 0, 0, .38);
-  }
-
-  * { box-sizing: border-box; }
-
-  body {
-    margin: 0;
-    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background:
-      radial-gradient(circle at 14% 8%, rgba(124,183,255,.11), transparent 30%),
-      radial-gradient(circle at 86% 0%, rgba(142,230,165,.08), transparent 25%),
-      var(--bg);
-    color: var(--text);
-  }
-
-  header {
-    padding: 24px 24px 12px;
-    max-width: 1880px;
-    margin: 0 auto;
-  }
-
-  h1 {
-    margin: 0 0 6px;
-    font-size: clamp(24px, 3vw, 38px);
-    letter-spacing: -.03em;
-  }
-
-  .sub {
-    color: var(--muted);
-    line-height: 1.45;
-    max-width: 980px;
-  }
-
-  main {
-    max-width: 1880px;
-    margin: 0 auto;
-    padding: 12px 24px 34px;
-    display: grid;
-    grid-template-columns: minmax(420px, 30rem) minmax(760px, 1.8fr) minmax(420px, 32rem);
-    gap: 20px;
-  }
-
-  @media (max-width: 1380px) {
-    main { grid-template-columns: 1fr; }
-  }
-
-  .workspace-sidebar {
-    display: grid;
-    gap: 18px;
-    align-content: start;
-  }
-
-  .card {
-    background: rgba(25, 29, 39, .94);
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    box-shadow: 0 18px 40px var(--shadow);
-    overflow: hidden;
-  }
-
-  .card h2 {
-    margin: 0;
-    padding: 16px 18px;
-    font-size: 15px;
-    letter-spacing: .03em;
-    text-transform: uppercase;
-    color: #d9e1ef;
-    border-bottom: 1px solid var(--line);
-    background: rgba(255,255,255,.025);
-  }
-
-  .content { padding: 16px; }
-
-  #dropZone {
-    border: 2px dashed #4a5367;
-    border-radius: 16px;
-    padding: 22px 16px;
-    text-align: center;
-    color: var(--muted);
-    cursor: pointer;
-    transition: .15s ease;
-    background: rgba(255,255,255,.025);
-  }
-
-  #dropZone.drag {
-    border-color: var(--accent);
-    background: rgba(124, 183, 255, .12);
-    color: var(--text);
-  }
-
-  #fileInput { display: none; }
-
-  .button-row {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 12px;
-  }
-
-  button, select, input[type="number"], input[type="text"], textarea {
-    background: var(--panel2);
-    color: var(--text);
-    border: 1px solid #444d63;
-    border-radius: 12px;
-    padding: 9px 11px;
-    font: inherit;
-  }
-
-  textarea {
-    resize: vertical;
-    min-height: 64px;
-  }
-
-  button {
-    cursor: pointer;
-    transition: .12s ease;
-  }
-
-  button:hover { filter: brightness(1.12); }
-  button:disabled {
-    opacity: .45;
-    cursor: not-allowed;
-    filter: none;
-  }
-
-  .primary {
-    background: linear-gradient(180deg, #2c7ad9, #1f5ea8);
-    border-color: #438ee8;
-  }
-
-  .danger {
-    background: rgba(255, 124, 124, .12);
-    border-color: rgba(255, 124, 124, .4);
-    color: #ffd0d0;
-  }
-
-  .settings {
-    display: grid;
-    gap: 13px;
-  }
-
-  .two-col {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 9px;
-  }
-
-  label {
-    display: grid;
-    gap: 7px;
-    color: #dfe5f2;
-    font-size: 13px;
-  }
-
-  .inline {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    color: #dfe5f2;
-    font-size: 13px;
-  }
-
-  input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    accent-color: #5da8ff;
-  }
-
-  input[type="range"] { width: 100%; }
-
-  .hint {
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 1.4;
-  }
-
-  .section-title {
-    margin: 2px 0 -4px;
-    color: #dce4f3;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-  }
-
-  .divider {
-    border: 0;
-    border-top: 1px solid var(--line);
-    margin: 16px 0;
-  }
-
-  .list {
-    display: grid;
-    gap: 8px;
-    max-height: min(58vh, 860px);
-    overflow: auto;
-    padding: 4px 2px 2px 0;
-  }
-
-  .item {
-    display: grid;
-    grid-template-columns: 34px 58px 1fr auto;
-    gap: 9px;
-    align-items: center;
-    padding: 8px;
-    border-radius: 14px;
-    border: 1px solid #32384a;
-    background: rgba(255,255,255,.025);
-  }
-
-  .item.dragging { opacity: .45; }
-
-  .handle {
-    cursor: grab;
-    color: var(--muted);
-    user-select: none;
-    text-align: center;
-    font-size: 22px;
-    line-height: 1;
-  }
-
-  .thumb {
-    width: 58px;
-    height: 44px;
-    object-fit: contain;
-    border-radius: 8px;
-    background:
-      linear-gradient(45deg, #777 25%, transparent 25%),
-      linear-gradient(-45deg, #777 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, #777 75%),
-      linear-gradient(-45deg, transparent 75%, #777 75%);
-    background-size: 12px 12px;
-    background-position: 0 0, 0 6px, 6px -6px, -6px 0px;
-  }
-
-  .meta { min-width: 0; }
-
-  .name {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 13px;
-    color: #f2f5fb;
-  }
-
-  .dims, .row-note {
-    font-size: 12px;
-    color: var(--muted);
-    margin-top: 2px;
-  }
-
-  .row-note strong {
-    color: #dfe7f7;
-    font-weight: 600;
-  }
-
-  .tiny-buttons {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-
-  .tiny-buttons button {
-    padding: 6px 7px;
-    border-radius: 9px;
-    font-size: 12px;
-  }
-
-  .preview-wrap {
-    padding: 0;
-    min-height: min(78vh, 980px);
-    height: calc(100vh - 126px);
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
-  }
-
-  .toolbar {
-    border-bottom: 1px solid var(--line);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
-    flex-wrap: wrap;
-  }
-
-  .preview-zoom-toast {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 3;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 6px;
-    border: 1px solid rgba(90, 103, 130, .9);
-    border-radius: 999px;
-    background: rgba(16, 20, 28, .82);
-    box-shadow: 0 8px 18px rgba(0,0,0,.22);
-    opacity: 0;
-    transform: translateY(-4px);
-    pointer-events: none;
-    transition: opacity .14s ease, transform .14s ease;
-  }
-
-  .canvas-shell:hover .preview-zoom-toast,
-  .canvas-shell:focus-within .preview-zoom-toast {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
-  }
-
-  .zoom-toast-btn {
-    min-width: 24px;
-    min-height: 24px;
-    padding: 3px 7px;
-    border-radius: 999px;
-    font-size: 12px;
-    line-height: 1;
-  }
-
-  .zoom-readout {
-    min-width: 38px;
-    text-align: center;
-    font-size: 11px;
-    line-height: 1;
-    color: var(--muted);
-  }
-
-  .stats {
-    color: var(--muted);
-    font-size: 13px;
-  }
-
-  .canvas-shell {
-    position: relative;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .canvas-holder {
-    overflow: auto;
-    padding: 20px;
-    height: 100%;
-    min-height: 0;
-    transition: filter .14s ease, opacity .14s ease;
-    overscroll-behavior: contain;
-  }
-
-  .canvas-shell.busy .canvas-holder {
-    filter: blur(6px);
-    opacity: .45;
-    pointer-events: none;
-  }
-
-  .busy-overlay {
-    position: absolute;
-    inset: 0;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
-    z-index: 2;
-  }
-
-  .canvas-shell.busy .busy-overlay {
-    display: flex;
-  }
-
-  .spinner {
-    width: 46px;
-    height: 46px;
-    border: 4px solid rgba(255,255,255,.22);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin .85s linear infinite;
-    box-shadow: 0 0 28px rgba(124,183,255,.35);
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  .checker {
-    width: max-content;
-    min-width: 100%;
-    min-height: 100%;
-    border-radius: 14px;
-    padding: 14px;
-    display: inline-block;
-    background:
-      linear-gradient(45deg, #2a2f3d 25%, transparent 25%),
-      linear-gradient(-45deg, #2a2f3d 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, #2a2f3d 75%),
-      linear-gradient(-45deg, transparent 75%, #2a2f3d 75%);
-    background-color: #202431;
-    background-size: 20px 20px;
-    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-  }
-
-  canvas {
-    display: block;
-    image-rendering: pixelated;
-    max-width: none;
-    background: transparent;
-    outline: 1px solid rgba(255,255,255,.08);
-  }
-
-  .footer {
-    border-top: 1px solid var(--line);
-    padding: 12px 14px;
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 1.45;
-  }
-
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    border: 1px solid #465065;
-    background: rgba(255,255,255,.035);
-    border-radius: 999px;
-    padding: 5px 9px;
-    margin-right: 6px;
-    margin-bottom: 6px;
-    color: #dce4f2;
-  }
-
-  .warn { color: var(--warn); }
-  .ok { color: var(--accent2); }
-
-  dialog {
-    width: min(760px, calc(100vw - 28px));
-    max-width: 760px;
-    background: var(--panel);
-    color: var(--text);
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    box-shadow: 0 30px 90px rgba(0,0,0,.55);
-  }
-
-  dialog::backdrop { background: rgba(0,0,0,.55); }
-
-  .sidebar-view[hidden] {
-    display: none !important;
-  }
-
-  .sidebar-back {
-    margin-top: 0;
-  }
-
-  .codex-only[hidden] {
-    display: none !important;
-  }
-
-  .dialog-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .mini-checker {
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 10px;
-    overflow: auto;
-    background:
-      linear-gradient(45deg, #2b3040 25%, transparent 25%),
-      linear-gradient(-45deg, #2b3040 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, #2b3040 75%),
-      linear-gradient(-45deg, transparent 75%, #2b3040 75%);
-    background-color: #202431;
-    background-size: 16px 16px;
-    background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
-  }
-
-  .codex-order {
-    display: grid;
-    gap: 5px;
-    margin: 10px 0 8px;
-    padding: 10px;
-    border: 1px solid #32384a;
-    border-radius: 12px;
-    background: rgba(255,255,255,.02);
-  }
-
-  .codex-order div {
-    display: flex;
-    gap: 10px;
-    justify-content: space-between;
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  .codex-order strong {
-    color: #edf2fb;
-    font-weight: 600;
-  }
-
-  pre {
-    white-space: pre-wrap;
-    background: #0f1117;
-    padding: 12px;
-    border-radius: 12px;
-    border: 1px solid #303546;
-    color: #dfe7f7;
-    overflow: auto;
-  }
-</style>
-</head>
-<body>
-<header>
-  <h1>Sprite Atlas Builder</h1>
-  <div class="sub">
-    Drop in sprite strips or sheets, reorder them, clean fake checkerboard backgrounds, tune per-strip character scale,
-    stack strips flush or padded, and export PNG, WebP, or a Codex pet package.
-  </div>
-</header>
-
-<main>
-  <section class="card">
-    <h2>Input</h2>
-    <div class="content">
-      <div id="dropZone">
-        <strong>Drop image files here</strong><br>
-        or click to choose multiple files
-        <input id="fileInput" type="file" accept="image/*" multiple>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Sprite Atlas Builder</title>
+    <meta
+      name="description"
+      content="Browser-only sprite strip atlas builder with Codex pet export support."
+    />
+    <style>
+      :root {
+        --bg: #101218;
+        --panel: #191d27;
+        --panel2: #222838;
+        --panel3: #10131b;
+        --text: #eef2fb;
+        --muted: #aeb7c9;
+        --line: #343b4e;
+        --accent: #7cb7ff;
+        --accent2: #8ee6a5;
+        --danger: #ff7c7c;
+        --warn: #ffd89b;
+        --shadow: rgba(0, 0, 0, 0.38);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        background:
+          radial-gradient(
+            circle at 14% 8%,
+            rgba(124, 183, 255, 0.11),
+            transparent 30%
+          ),
+          radial-gradient(
+            circle at 86% 0%,
+            rgba(142, 230, 165, 0.08),
+            transparent 25%
+          ),
+          var(--bg);
+        color: var(--text);
+      }
+
+      header {
+        padding: 24px 24px 12px;
+        max-width: 1880px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 0 0 6px;
+        font-size: clamp(24px, 3vw, 38px);
+        letter-spacing: -0.03em;
+      }
+
+      .sub {
+        color: var(--muted);
+        line-height: 1.45;
+        max-width: 980px;
+      }
+
+      main {
+        max-width: 1880px;
+        margin: 0 auto;
+        padding: 12px 24px 34px;
+        display: grid;
+        grid-template-columns: minmax(420px, 30rem) minmax(760px, 1.8fr) minmax(
+            420px,
+            32rem
+          );
+        gap: 20px;
+      }
+
+      @media (max-width: 1380px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .workspace-sidebar {
+        display: grid;
+        gap: 18px;
+        align-content: start;
+      }
+
+      .card {
+        background: rgba(25, 29, 39, 0.94);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 18px 40px var(--shadow);
+        overflow: hidden;
+      }
+
+      .card h2 {
+        margin: 0;
+        padding: 16px 18px;
+        font-size: 15px;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: #d9e1ef;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.025);
+      }
+
+      .content {
+        padding: 16px;
+      }
+
+      #dropZone {
+        border: 2px dashed #4a5367;
+        border-radius: 16px;
+        padding: 22px 16px;
+        text-align: center;
+        color: var(--muted);
+        cursor: pointer;
+        transition: 0.15s ease;
+        background: rgba(255, 255, 255, 0.025);
+      }
+
+      #dropZone.drag {
+        border-color: var(--accent);
+        background: rgba(124, 183, 255, 0.12);
+        color: var(--text);
+      }
+
+      #fileInput {
+        display: none;
+      }
+
+      .button-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+
+      button,
+      select,
+      input[type="number"],
+      input[type="text"],
+      textarea {
+        background: var(--panel2);
+        color: var(--text);
+        border: 1px solid #444d63;
+        border-radius: 12px;
+        padding: 9px 11px;
+        font: inherit;
+      }
+
+      textarea {
+        resize: vertical;
+        min-height: 64px;
+      }
+
+      button {
+        cursor: pointer;
+        transition: 0.12s ease;
+      }
+
+      button:hover {
+        filter: brightness(1.12);
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+        filter: none;
+      }
+
+      .primary {
+        background: linear-gradient(180deg, #2c7ad9, #1f5ea8);
+        border-color: #438ee8;
+      }
+
+      .danger {
+        background: rgba(255, 124, 124, 0.12);
+        border-color: rgba(255, 124, 124, 0.4);
+        color: #ffd0d0;
+      }
+
+      .settings {
+        display: grid;
+        gap: 13px;
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+      }
+
+      label {
+        display: grid;
+        gap: 7px;
+        color: #dfe5f2;
+        font-size: 13px;
+      }
+
+      .inline {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        color: #dfe5f2;
+        font-size: 13px;
+      }
+
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: #5da8ff;
+      }
+
+      input[type="range"] {
+        width: 100%;
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .section-title {
+        margin: 2px 0 -4px;
+        color: #dce4f3;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .divider {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 16px 0;
+      }
+
+      .list {
+        display: grid;
+        gap: 8px;
+        max-height: min(58vh, 860px);
+        overflow: auto;
+        padding: 4px 2px 2px 0;
+      }
+
+      .item {
+        display: grid;
+        grid-template-columns: 34px 58px 1fr auto;
+        gap: 9px;
+        align-items: center;
+        padding: 8px;
+        border-radius: 14px;
+        border: 1px solid #32384a;
+        background: rgba(255, 255, 255, 0.025);
+      }
+
+      .item.dragging {
+        opacity: 0.45;
+      }
+
+      .handle {
+        cursor: grab;
+        color: var(--muted);
+        user-select: none;
+        text-align: center;
+        font-size: 22px;
+        line-height: 1;
+      }
+
+      .thumb {
+        width: 58px;
+        height: 44px;
+        object-fit: contain;
+        border-radius: 8px;
+        background:
+          linear-gradient(45deg, #777 25%, transparent 25%),
+          linear-gradient(-45deg, #777 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #777 75%),
+          linear-gradient(-45deg, transparent 75%, #777 75%);
+        background-size: 12px 12px;
+        background-position:
+          0 0,
+          0 6px,
+          6px -6px,
+          -6px 0px;
+      }
+
+      .meta {
+        min-width: 0;
+      }
+
+      .name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 13px;
+        color: #f2f5fb;
+      }
+
+      .dims,
+      .row-note {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+
+      .row-note strong {
+        color: #dfe7f7;
+        font-weight: 600;
+      }
+
+      .tiny-buttons {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .tiny-buttons button {
+        padding: 6px 7px;
+        border-radius: 9px;
+        font-size: 12px;
+      }
+
+      .preview-wrap {
+        padding: 0;
+        min-height: min(78vh, 980px);
+        height: calc(100vh - 126px);
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+      }
+
+      .toolbar {
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        flex-wrap: wrap;
+      }
+
+      .preview-zoom-toast {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        z-index: 3;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 6px;
+        border: 1px solid rgba(90, 103, 130, 0.9);
+        border-radius: 999px;
+        background: rgba(16, 20, 28, 0.82);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+        opacity: 0;
+        transform: translateY(-4px);
+        pointer-events: none;
+        transition:
+          opacity 0.14s ease,
+          transform 0.14s ease;
+      }
+
+      .canvas-shell:hover .preview-zoom-toast,
+      .canvas-shell:focus-within .preview-zoom-toast {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+
+      .zoom-toast-btn {
+        min-width: 24px;
+        min-height: 24px;
+        padding: 3px 7px;
+        border-radius: 999px;
+        font-size: 12px;
+        line-height: 1;
+      }
+
+      .zoom-readout {
+        min-width: 38px;
+        text-align: center;
+        font-size: 11px;
+        line-height: 1;
+        color: var(--muted);
+      }
+
+      .stats {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .canvas-shell {
+        position: relative;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .canvas-holder {
+        overflow: auto;
+        padding: 20px;
+        height: 100%;
+        min-height: 0;
+        transition:
+          filter 0.14s ease,
+          opacity 0.14s ease;
+        overscroll-behavior: contain;
+      }
+
+      .canvas-shell.busy .canvas-holder {
+        filter: blur(6px);
+        opacity: 0.45;
+        pointer-events: none;
+      }
+
+      .busy-overlay {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 2;
+      }
+
+      .canvas-shell.busy .busy-overlay {
+        display: flex;
+      }
+
+      .spinner {
+        width: 46px;
+        height: 46px;
+        border: 4px solid rgba(255, 255, 255, 0.22);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.85s linear infinite;
+        box-shadow: 0 0 28px rgba(124, 183, 255, 0.35);
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .checker {
+        width: max-content;
+        min-width: 100%;
+        min-height: 100%;
+        border-radius: 14px;
+        padding: 14px;
+        display: inline-block;
+        background:
+          linear-gradient(45deg, #2a2f3d 25%, transparent 25%),
+          linear-gradient(-45deg, #2a2f3d 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #2a2f3d 75%),
+          linear-gradient(-45deg, transparent 75%, #2a2f3d 75%);
+        background-color: #202431;
+        background-size: 20px 20px;
+        background-position:
+          0 0,
+          0 10px,
+          10px -10px,
+          -10px 0px;
+      }
+
+      canvas {
+        display: block;
+        image-rendering: pixelated;
+        max-width: none;
+        background: transparent;
+        outline: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .footer {
+        border-top: 1px solid var(--line);
+        padding: 12px 14px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #465065;
+        background: rgba(255, 255, 255, 0.035);
+        border-radius: 999px;
+        padding: 5px 9px;
+        margin-right: 6px;
+        margin-bottom: 6px;
+        color: #dce4f2;
+      }
+
+      .warn {
+        color: var(--warn);
+      }
+      .ok {
+        color: var(--accent2);
+      }
+
+      dialog {
+        width: min(760px, calc(100vw - 28px));
+        max-width: 760px;
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+      }
+
+      dialog::backdrop {
+        background: rgba(0, 0, 0, 0.55);
+      }
+
+      .sidebar-view[hidden] {
+        display: none !important;
+      }
+
+      .sidebar-back {
+        margin-top: 0;
+      }
+
+      .codex-only[hidden] {
+        display: none !important;
+      }
+
+      .dialog-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .mini-checker {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px;
+        overflow: auto;
+        background:
+          linear-gradient(45deg, #2b3040 25%, transparent 25%),
+          linear-gradient(-45deg, #2b3040 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #2b3040 75%),
+          linear-gradient(-45deg, transparent 75%, #2b3040 75%);
+        background-color: #202431;
+        background-size: 16px 16px;
+        background-position:
+          0 0,
+          0 8px,
+          8px -8px,
+          -8px 0px;
+      }
+
+      .codex-order {
+        display: grid;
+        gap: 5px;
+        margin: 10px 0 8px;
+        padding: 10px;
+        border: 1px solid #32384a;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .codex-order div {
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .codex-order strong {
+        color: #edf2fb;
+        font-weight: 600;
+      }
+
+      pre {
+        white-space: pre-wrap;
+        background: #0f1117;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid #303546;
+        color: #dfe7f7;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Sprite Atlas Builder</h1>
+      <div class="sub">
+        Drop in sprite strips or sheets, reorder them, clean fake checkerboard
+        backgrounds, tune per-strip character scale, stack strips flush or
+        padded, and export PNG, WebP, or a Codex pet package.
       </div>
+    </header>
 
-      <div class="button-row">
-        <button id="rebuildBtn" class="primary">Rebuild preview</button>
-        <button id="clearBtn" class="danger">Clear all</button>
-        <button id="helpBtn">Notes</button>
-      </div>
+    <main>
+      <section class="card">
+        <h2>Input</h2>
+        <div class="content">
+          <div id="dropZone">
+            <strong>Drop image files here</strong><br />
+            or click to choose multiple files
+            <input id="fileInput" type="file" accept="image/*" multiple />
+          </div>
 
-      <hr class="divider">
+          <div class="button-row">
+            <button id="rebuildBtn" class="primary">Rebuild preview</button>
+            <button id="clearBtn" class="danger">Clear all</button>
+            <button id="helpBtn">Notes</button>
+          </div>
 
-      <div class="settings">
-        <div class="section-title">Atlas layout</div>
+          <hr class="divider" />
 
-        <label>
-          Export format
-          <select id="exportFormat">
-            <option value="image/png">PNG atlas</option>
-            <option value="image/webp" selected>WebP atlas</option>
-            <option value="codex/zip">Codex pet package (.zip)</option>
-          </select>
-        </label>
-
-        <label>
-          Layout
-          <select id="layoutMode">
-            <option value="vertical" selected>Stack vertically, flush rows</option>
-            <option value="horizontal">Place horizontally, flush columns</option>
-          </select>
-        </label>
-
-        <label>
-          Alignment for shorter rows/columns
-          <select id="alignMode">
-            <option value="start" selected>Start / left / top</option>
-            <option value="center">Center</option>
-            <option value="end">End / right / bottom</option>
-          </select>
-        </label>
-
-        <label>
-          Padding between strips after all processing
-          <input id="stripPadding" type="number" min="0" step="1" value="0">
-          <span class="hint">Applied after cleanup, trim, normalization, scaling, and alignment. Codex export ignores this to preserve the fixed grid.</span>
-        </label>
-
-        <label class="inline">
-          <input id="normalizeEnabled" type="checkbox">
-          Normalize strip height/width before final stacking
-        </label>
-
-        <label>
-          Normalize target
-          <select id="normalizeTarget">
-            <option value="max" selected>Use largest strip dimension</option>
-            <option value="min">Use smallest strip dimension</option>
-            <option value="custom">Use custom pixels</option>
-          </select>
-        </label>
-
-        <label>
-          Custom normalize pixels
-          <input id="customNormalize" type="number" min="1" step="1" value="64">
-        </label>
-
-        <div class="section-title">Cleanup</div>
-
-        <label class="inline">
-          <input id="trimTransparent" type="checkbox">
-          Trim transparent edges after cleanup
-        </label>
-
-        <label class="inline">
-          <input id="removeChecker" type="checkbox" checked>
-          Auto-clear fake checkerboard backgrounds
-        </label>
-
-        <label>
-          Checker cleanup tolerance: <span id="tolLabel">30</span>
-          <input id="tolerance" type="range" min="0" max="90" value="30">
-          <span class="hint">Debounced. It applies shortly after you stop dragging the slider.</span>
-        </label>
-
-        <label>
-          Cleanup mode
-          <select id="cleanupMode">
-            <option value="global" selected>Remove detected checker colours globally</option>
-            <option value="edge">Only remove checker connected to image edges</option>
-          </select>
-          <span class="hint">Global is best for holes inside transparent areas. Edge-only is safer for sprites that use similar colours.</span>
-        </label>
-
-        <div class="section-title">WebP / Codex</div>
-
-        <label>
-          WebP quality: <span id="qualityLabel">0.92</span>
-          <input id="quality" type="range" min="0.1" max="1" value="0.92" step="0.01">
-        </label>
-
-        <div class="two-col">
-          <label>
-            Pet id
-            <input id="petId" type="text" value="my-pet" spellcheck="false">
-          </label>
-          <label>
-            Pet display name
-            <input id="petName" type="text" value="My Pet">
-          </label>
-        </div>
-
-        <label>
-          Pet description
-          <textarea id="petDescription">A focused coding companion.</textarea>
-        </label>
-
-        <label>
-          Codex cell inner padding
-          <input id="codexCellPadding" type="number" min="0" max="80" step="1" value="0">
-          <span class="hint">Transparent padding inside each 192×208 Codex frame cell.</span>
-        </label>
-      </div>
-    </div>
-  </section>
-
-  <section class="card preview-wrap">
-    <div class="toolbar">
-      <div class="stats" id="stats">No images loaded.</div>
-      <div class="button-row" style="margin:0">
-        <button id="downloadBtn" class="primary" disabled>Export</button>
-        <button id="downloadJsonBtn" disabled>Export metadata JSON</button>
-      </div>
-    </div>
-
-    <div class="canvas-shell" id="canvasShell">
-      <div class="preview-zoom-toast" aria-label="Preview zoom controls">
-        <button id="zoomOutBtn" class="zoom-toast-btn" type="button" title="Zoom out">-</button>
-        <span class="zoom-readout" id="zoomLabel">100%</span>
-        <button id="zoomInBtn" class="zoom-toast-btn" type="button" title="Zoom in">+</button>
-        <button id="zoomResetBtn" class="zoom-toast-btn" type="button" title="Reset zoom">Reset</button>
-      </div>
-      <div class="busy-overlay"><div class="spinner" aria-label="Loading"></div></div>
-      <div class="canvas-holder" id="canvasHolder">
-        <div class="checker">
-          <canvas id="atlasCanvas" width="1" height="1"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <div class="footer" id="log">
-      <span class="pill">Transparent PNGs are preserved</span>
-      <span class="pill">No upload</span>
-      <span class="pill">Drag rows to reorder</span>
-      <span class="pill">Codex package = pet.json + spritesheet.webp</span>
-    </div>
-  </section>
-
-  <div class="workspace-sidebar">
-    <section class="card">
-      <h2 id="sidebarTitle">Reorder</h2>
-      <div class="content sidebar-view" id="reorderView">
-        <div class="codex-only" id="codexOrderPanel">
-          <div class="hint">Codex order is fixed. Match the loaded strips to these rows before exporting a pet package.</div>
-          <div class="codex-order" id="codexOrderLegend"></div>
-        </div>
-        <div class="section-title" style="margin:12px 0 6px">Loaded strips</div>
-        <div class="list" id="list"></div>
-      </div>
-      <div class="content sidebar-view" id="editView" hidden>
-        <div class="button-row sidebar-back">
-          <button id="backToListBtn" type="button">Back</button>
-        </div>
-        <div class="dialog-grid">
           <div class="settings">
-            <div>
-              <div class="hint">Editing</div>
-              <strong id="editName"></strong>
-            </div>
+            <div class="section-title">Atlas layout</div>
 
             <label>
-              Character / strip scale: <span id="editScaleLabel">100%</span>
-              <input id="editScale" type="range" min="10" max="300" step="1" value="100">
-              <span class="hint">Use this to visually align character size across strips.</span>
+              Export format
+              <select id="exportFormat">
+                <option value="image/png">PNG atlas</option>
+                <option value="image/webp" selected>WebP atlas</option>
+                <option value="codex/zip">Codex pet package (.zip)</option>
+              </select>
+            </label>
+
+            <label>
+              Layout
+              <select id="layoutMode">
+                <option value="vertical" selected>
+                  Stack vertically, flush rows
+                </option>
+                <option value="horizontal">
+                  Place horizontally, flush columns
+                </option>
+              </select>
+            </label>
+
+            <label>
+              Alignment for shorter rows/columns
+              <select id="alignMode">
+                <option value="start" selected>Start / left / top</option>
+                <option value="center">Center</option>
+                <option value="end">End / right / bottom</option>
+              </select>
+            </label>
+
+            <label>
+              Padding between strips after all processing
+              <input
+                id="stripPadding"
+                type="number"
+                min="0"
+                step="1"
+                value="0"
+              />
+              <span class="hint"
+                >Applied after cleanup, trim, normalization, scaling, and
+                alignment. Codex export ignores this to preserve the fixed
+                grid.</span
+              >
+            </label>
+
+            <label class="inline">
+              <input id="normalizeEnabled" type="checkbox" />
+              Normalize strip height/width before final stacking
+            </label>
+
+            <label>
+              Normalize target
+              <select id="normalizeTarget">
+                <option value="max" selected>
+                  Use largest strip dimension
+                </option>
+                <option value="min">Use smallest strip dimension</option>
+                <option value="custom">Use custom pixels</option>
+              </select>
+            </label>
+
+            <label>
+              Custom normalize pixels
+              <input
+                id="customNormalize"
+                type="number"
+                min="1"
+                step="1"
+                value="64"
+              />
+            </label>
+
+            <div class="section-title">Cleanup</div>
+
+            <label class="inline">
+              <input id="trimTransparent" type="checkbox" />
+              Trim transparent edges after cleanup
+            </label>
+
+            <label class="inline">
+              <input id="removeChecker" type="checkbox" checked />
+              Auto-clear fake checkerboard backgrounds
+            </label>
+
+            <label>
+              Checker cleanup tolerance: <span id="tolLabel">30</span>
+              <input id="tolerance" type="range" min="0" max="90" value="30" />
+              <span class="hint"
+                >Debounced. It applies shortly after you stop dragging the
+                slider.</span
+              >
+            </label>
+
+            <label>
+              Cleanup mode
+              <select id="cleanupMode">
+                <option value="global" selected>
+                  Remove detected checker colours globally
+                </option>
+                <option value="edge">
+                  Only remove checker connected to image edges
+                </option>
+              </select>
+              <span class="hint"
+                >Global is best for holes inside transparent areas. Edge-only is
+                safer for sprites that use similar colours.</span
+              >
+            </label>
+
+            <div class="section-title">WebP / Codex</div>
+
+            <label>
+              WebP quality: <span id="qualityLabel">0.92</span>
+              <input
+                id="quality"
+                type="range"
+                min="0.1"
+                max="1"
+                value="0.92"
+                step="0.01"
+              />
             </label>
 
             <div class="two-col">
               <label>
-                X nudge
-                <input id="editOffsetX" type="number" step="1" value="0">
+                Pet id
+                <input
+                  id="petId"
+                  type="text"
+                  value="my-pet"
+                  spellcheck="false"
+                />
               </label>
               <label>
-                Y nudge
-                <input id="editOffsetY" type="number" step="1" value="0">
+                Pet display name
+                <input id="petName" type="text" value="My Pet" />
               </label>
             </div>
 
             <label>
-              Codex source frames in this strip
-              <input id="editSourceFrames" type="number" min="1" max="8" step="1" value="8">
-              <span class="hint">For Codex export, the strip is split into this many equal source frames. The output row still has 8 cells.</span>
+              Pet description
+              <textarea id="petDescription">
+A focused coding companion.</textarea
+              >
             </label>
 
-            <div>
-              <div class="hint">Codex row/state if exported now</div>
-              <strong id="editCodexState"></strong>
-            </div>
-
-            <div class="button-row">
-              <button id="resetItemBtn" class="danger">Reset this strip</button>
-              <button id="closeItemBtn" class="primary">Done</button>
-            </div>
+            <label>
+              Codex cell inner padding
+              <input
+                id="codexCellPadding"
+                type="number"
+                min="0"
+                max="80"
+                step="1"
+                value="0"
+              />
+              <span class="hint"
+                >Transparent padding inside each 192×208 Codex frame cell.</span
+              >
+            </label>
           </div>
+        </div>
+      </section>
 
-          <div>
-            <div class="hint" style="margin-bottom:7px">Original preview</div>
-            <div class="mini-checker">
-              <canvas id="editPreview" width="220" height="160"></canvas>
+      <section class="card preview-wrap">
+        <div class="toolbar">
+          <div class="stats" id="stats">No images loaded.</div>
+          <div class="button-row" style="margin: 0">
+            <button id="downloadBtn" class="primary" disabled>Export</button>
+            <button id="downloadJsonBtn" disabled>Export metadata JSON</button>
+          </div>
+        </div>
+
+        <div class="canvas-shell" id="canvasShell">
+          <div class="preview-zoom-toast" aria-label="Preview zoom controls">
+            <button
+              id="zoomOutBtn"
+              class="zoom-toast-btn"
+              type="button"
+              title="Zoom out"
+            >
+              -
+            </button>
+            <span class="zoom-readout" id="zoomLabel">100%</span>
+            <button
+              id="zoomInBtn"
+              class="zoom-toast-btn"
+              type="button"
+              title="Zoom in"
+            >
+              +
+            </button>
+            <button
+              id="zoomResetBtn"
+              class="zoom-toast-btn"
+              type="button"
+              title="Reset zoom"
+            >
+              Reset
+            </button>
+          </div>
+          <div class="busy-overlay">
+            <div class="spinner" aria-label="Loading"></div>
+          </div>
+          <div class="canvas-holder" id="canvasHolder">
+            <div class="checker">
+              <canvas id="atlasCanvas" width="1" height="1"></canvas>
             </div>
           </div>
         </div>
-      </div>
-    </section>
-  </div>
-</main>
 
-<dialog id="helpDialog">
-  <h2 style="margin-top:0">Notes</h2>
-  <p>
-    The checkerboard cleanup samples image colours and makes detected fake checker pixels transparent.
-    It is adjustable because no browser tool can perfectly know whether a grey pixel is fake background or real artwork.
-  </p>
-  <pre>Normal atlas workflow:
+        <div class="footer" id="log">
+          <span class="pill">Transparent PNGs are preserved</span>
+          <span class="pill">No upload</span>
+          <span class="pill">Drag rows to reorder</span>
+          <span class="pill">Codex package = pet.json + spritesheet.webp</span>
+        </div>
+      </section>
+
+      <div class="workspace-sidebar">
+        <section class="card">
+          <h2 id="sidebarTitle">Reorder</h2>
+          <div class="content sidebar-view" id="reorderView">
+            <div class="codex-only" id="codexOrderPanel">
+              <div class="hint">
+                Codex order is fixed. Match the loaded strips to these rows
+                before exporting a pet package.
+              </div>
+              <div class="codex-order" id="codexOrderLegend"></div>
+            </div>
+            <div class="section-title" style="margin: 12px 0 6px">
+              Loaded strips
+            </div>
+            <div class="list" id="list"></div>
+          </div>
+          <div class="content sidebar-view" id="editView" hidden>
+            <div class="button-row sidebar-back">
+              <button id="backToListBtn" type="button">Back</button>
+            </div>
+            <div class="dialog-grid">
+              <div class="settings">
+                <div>
+                  <div class="hint">Editing</div>
+                  <strong id="editName"></strong>
+                </div>
+
+                <label>
+                  Character / strip scale: <span id="editScaleLabel">100%</span>
+                  <input
+                    id="editScale"
+                    type="range"
+                    min="10"
+                    max="300"
+                    step="1"
+                    value="100"
+                  />
+                  <span class="hint"
+                    >Use this to visually align character size across
+                    strips.</span
+                  >
+                </label>
+
+                <div class="two-col">
+                  <label>
+                    X nudge
+                    <input id="editOffsetX" type="number" step="1" value="0" />
+                  </label>
+                  <label>
+                    Y nudge
+                    <input id="editOffsetY" type="number" step="1" value="0" />
+                  </label>
+                </div>
+
+                <label>
+                  Codex source frames in this strip
+                  <input
+                    id="editSourceFrames"
+                    type="number"
+                    min="1"
+                    max="8"
+                    step="1"
+                    value="8"
+                  />
+                  <span class="hint"
+                    >For Codex export, the strip is split into this many equal
+                    source frames. The output row still has 8 cells.</span
+                  >
+                </label>
+
+                <div>
+                  <div class="hint">Codex row/state if exported now</div>
+                  <strong id="editCodexState"></strong>
+                </div>
+
+                <div class="button-row">
+                  <button id="resetItemBtn" class="danger">
+                    Reset this strip
+                  </button>
+                  <button id="closeItemBtn" class="primary">Done</button>
+                </div>
+              </div>
+
+              <div>
+                <div class="hint" style="margin-bottom: 7px">
+                  Original preview
+                </div>
+                <div class="mini-checker">
+                  <canvas id="editPreview" width="220" height="160"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <dialog id="helpDialog">
+      <h2 style="margin-top: 0">Notes</h2>
+      <p>
+        The checkerboard cleanup samples image colours and makes detected fake
+        checker pixels transparent. It is adjustable because no browser tool can
+        perfectly know whether a grey pixel is fake background or real artwork.
+      </p>
+      <pre>
+Normal atlas workflow:
 1. Drop sprite strips.
 2. Reorder them.
 3. Optional: open each strip with Edit and adjust scale/nudge.
@@ -789,1291 +964,1518 @@ Codex pet workflow:
 2. Open each strip and set "Codex source frames" if it is not 8.
 3. Choose "Codex pet package (.zip)".
 4. Export.
-5. Put the unzipped folder under ~/.codex/pets/ or %USERPROFILE%\.codex\pets\.</pre>
-  <button onclick="document.getElementById('helpDialog').close()">Close</button>
-</dialog>
+5. Put the unzipped folder under ~/.codex/pets/ or %USERPROFILE%\.codex\pets\.</pre
+      >
+      <button onclick="document.getElementById('helpDialog').close()">
+        Close
+      </button>
+    </dialog>
 
-<script>
-(() => {
-  "use strict";
+    <script>
+      (() => {
+        "use strict";
 
-  const CODEX_WIDTH = 1536;
-  const CODEX_HEIGHT = 1872;
-  const CODEX_COLS = 8;
-  const CODEX_ROWS = 9;
-  const CODEX_FRAME_W = 192;
-  const CODEX_FRAME_H = 208;
-  const CODEX_STATES = [
-    { name: "idle", label: "Idle", frames: 6 },
-    { name: "runningRight", label: "Running right", frames: 8 },
-    { name: "runningLeft", label: "Running left", frames: 8 },
-    { name: "waving", label: "Waving", frames: 4 },
-    { name: "jumping", label: "Jumping", frames: 5 },
-    { name: "failed", label: "Failed", frames: 8 },
-    { name: "waiting", label: "Waiting", frames: 6 },
-    { name: "running", label: "Running / working", frames: 6 },
-    { name: "review", label: "Review", frames: 6 }
-  ];
+        const CODEX_WIDTH = 1536;
+        const CODEX_HEIGHT = 1872;
+        const CODEX_COLS = 8;
+        const CODEX_ROWS = 9;
+        const CODEX_FRAME_W = 192;
+        const CODEX_FRAME_H = 208;
+        const CODEX_STATES = [
+          { name: "idle", label: "Idle", frames: 6 },
+          { name: "runningRight", label: "Running right", frames: 8 },
+          { name: "runningLeft", label: "Running left", frames: 8 },
+          { name: "waving", label: "Waving", frames: 4 },
+          { name: "jumping", label: "Jumping", frames: 5 },
+          { name: "failed", label: "Failed", frames: 8 },
+          { name: "waiting", label: "Waiting", frames: 6 },
+          { name: "running", label: "Running / working", frames: 6 },
+          { name: "review", label: "Review", frames: 6 },
+        ];
 
-  const $ = id => document.getElementById(id);
+        const $ = (id) => document.getElementById(id);
 
-  const state = {
-    items: [],
-    metadata: [],
-    editItemId: null,
-    rebuildTimer: null,
-    busyReasons: new Set(),
-    previewZoom: 1
-  };
+        const state = {
+          items: [],
+          metadata: [],
+          editItemId: null,
+          rebuildTimer: null,
+          busyReasons: new Set(),
+          previewZoom: 1,
+        };
 
-  const els = {
-    dropZone: $("dropZone"),
-    fileInput: $("fileInput"),
-    list: $("list"),
-    codexOrderLegend: $("codexOrderLegend"),
-    codexOrderPanel: $("codexOrderPanel"),
-    canvas: $("atlasCanvas"),
-    canvasHolder: $("canvasHolder"),
-    canvasShell: $("canvasShell"),
-    stats: $("stats"),
-    log: $("log"),
-    rebuildBtn: $("rebuildBtn"),
-    clearBtn: $("clearBtn"),
-    helpBtn: $("helpBtn"),
-    downloadBtn: $("downloadBtn"),
-    downloadJsonBtn: $("downloadJsonBtn"),
-    layoutMode: $("layoutMode"),
-    alignMode: $("alignMode"),
-    stripPadding: $("stripPadding"),
-    normalizeEnabled: $("normalizeEnabled"),
-    normalizeTarget: $("normalizeTarget"),
-    customNormalize: $("customNormalize"),
-    trimTransparent: $("trimTransparent"),
-    removeChecker: $("removeChecker"),
-    tolerance: $("tolerance"),
-    tolLabel: $("tolLabel"),
-    cleanupMode: $("cleanupMode"),
-    exportFormat: $("exportFormat"),
-    sidebarTitle: $("sidebarTitle"),
-    reorderView: $("reorderView"),
-    editView: $("editView"),
-    backToListBtn: $("backToListBtn"),
-    zoomOutBtn: $("zoomOutBtn"),
-    zoomInBtn: $("zoomInBtn"),
-    zoomResetBtn: $("zoomResetBtn"),
-    zoomLabel: $("zoomLabel"),
-    quality: $("quality"),
-    qualityLabel: $("qualityLabel"),
-    petId: $("petId"),
-    petName: $("petName"),
-    petDescription: $("petDescription"),
-    codexCellPadding: $("codexCellPadding"),
-    helpDialog: $("helpDialog"),
-    editName: $("editName"),
-    editScale: $("editScale"),
-    editScaleLabel: $("editScaleLabel"),
-    editOffsetX: $("editOffsetX"),
-    editOffsetY: $("editOffsetY"),
-    editSourceFrames: $("editSourceFrames"),
-    editCodexState: $("editCodexState"),
-    editPreview: $("editPreview"),
-    resetItemBtn: $("resetItemBtn"),
-    closeItemBtn: $("closeItemBtn")
-  };
+        const els = {
+          dropZone: $("dropZone"),
+          fileInput: $("fileInput"),
+          list: $("list"),
+          codexOrderLegend: $("codexOrderLegend"),
+          codexOrderPanel: $("codexOrderPanel"),
+          canvas: $("atlasCanvas"),
+          canvasHolder: $("canvasHolder"),
+          canvasShell: $("canvasShell"),
+          stats: $("stats"),
+          log: $("log"),
+          rebuildBtn: $("rebuildBtn"),
+          clearBtn: $("clearBtn"),
+          helpBtn: $("helpBtn"),
+          downloadBtn: $("downloadBtn"),
+          downloadJsonBtn: $("downloadJsonBtn"),
+          layoutMode: $("layoutMode"),
+          alignMode: $("alignMode"),
+          stripPadding: $("stripPadding"),
+          normalizeEnabled: $("normalizeEnabled"),
+          normalizeTarget: $("normalizeTarget"),
+          customNormalize: $("customNormalize"),
+          trimTransparent: $("trimTransparent"),
+          removeChecker: $("removeChecker"),
+          tolerance: $("tolerance"),
+          tolLabel: $("tolLabel"),
+          cleanupMode: $("cleanupMode"),
+          exportFormat: $("exportFormat"),
+          sidebarTitle: $("sidebarTitle"),
+          reorderView: $("reorderView"),
+          editView: $("editView"),
+          backToListBtn: $("backToListBtn"),
+          zoomOutBtn: $("zoomOutBtn"),
+          zoomInBtn: $("zoomInBtn"),
+          zoomResetBtn: $("zoomResetBtn"),
+          zoomLabel: $("zoomLabel"),
+          quality: $("quality"),
+          qualityLabel: $("qualityLabel"),
+          petId: $("petId"),
+          petName: $("petName"),
+          petDescription: $("petDescription"),
+          codexCellPadding: $("codexCellPadding"),
+          helpDialog: $("helpDialog"),
+          editName: $("editName"),
+          editScale: $("editScale"),
+          editScaleLabel: $("editScaleLabel"),
+          editOffsetX: $("editOffsetX"),
+          editOffsetY: $("editOffsetY"),
+          editSourceFrames: $("editSourceFrames"),
+          editCodexState: $("editCodexState"),
+          editPreview: $("editPreview"),
+          resetItemBtn: $("resetItemBtn"),
+          closeItemBtn: $("closeItemBtn"),
+        };
 
-  const ctx = els.canvas.getContext("2d", { willReadFrequently: true });
+        const ctx = els.canvas.getContext("2d", { willReadFrequently: true });
 
-  function makeId() {
-    return crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
-  }
-
-  function escapeHtml(text) {
-    return String(text).replace(/[&<>"']/g, c => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
-    }[c]));
-  }
-
-  function log(message, kind = "") {
-    const cls = kind === "warn" ? "warn" : kind === "ok" ? "ok" : "";
-    els.log.innerHTML = `<span class="${cls}">${escapeHtml(message)}</span>`;
-  }
-
-  function isCodexExportMode() {
-    return els.exportFormat.value === "codex/zip";
-  }
-
-  function applyPreviewZoom() {
-    const zoom = Math.max(0.25, Math.min(6, Number(state.previewZoom) || 1));
-    state.previewZoom = zoom;
-    els.zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
-    els.canvas.style.width = `${Math.max(1, Math.round(els.canvas.width * zoom))}px`;
-    els.canvas.style.height = `${Math.max(1, Math.round(els.canvas.height * zoom))}px`;
-  }
-
-  function setPreviewZoom(value) {
-    state.previewZoom = Math.max(0.25, Math.min(6, Number(value) || 1));
-    applyPreviewZoom();
-  }
-
-  function showReorderView() {
-    els.sidebarTitle.textContent = "Reorder";
-    els.reorderView.hidden = false;
-    els.editView.hidden = true;
-  }
-
-  function showEditView() {
-    els.sidebarTitle.textContent = "Adjust sprite strip";
-    els.reorderView.hidden = true;
-    els.editView.hidden = false;
-  }
-
-  function updateExportModeUI() {
-    els.codexOrderPanel.hidden = !isCodexExportMode();
-    updateStats();
-  }
-
-  function syncBusy() {
-    els.canvasShell.classList.toggle("busy", state.busyReasons.size > 0);
-  }
-
-  function setBusy(on, reason = "generic") {
-    if (on) state.busyReasons.add(reason);
-    else state.busyReasons.delete(reason);
-    syncBusy();
-  }
-
-  function scheduleRebuild(delay = 120) {
-    clearTimeout(state.rebuildTimer);
-    setBusy(true, "rebuild");
-    state.rebuildTimer = setTimeout(() => {
-      requestAnimationFrame(() => {
-        try {
-          rebuildNow();
-        } finally {
-          state.rebuildTimer = null;
-          setBusy(false, "rebuild");
+        function makeId() {
+          return crypto.randomUUID
+            ? crypto.randomUUID()
+            : String(Date.now() + Math.random());
         }
-      });
-    }, delay);
-  }
 
-  function setupEvents() {
-    els.dropZone.addEventListener("click", () => els.fileInput.click());
-    els.fileInput.addEventListener("change", e => addFiles(e.target.files));
+        function escapeHtml(text) {
+          return String(text).replace(
+            /[&<>"']/g,
+            (c) =>
+              ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#039;",
+              })[c],
+          );
+        }
 
-    ["dragenter", "dragover"].forEach(type => {
-      els.dropZone.addEventListener(type, e => {
-        e.preventDefault();
-        els.dropZone.classList.add("drag");
-      });
-    });
+        function log(message, kind = "") {
+          const cls = kind === "warn" ? "warn" : kind === "ok" ? "ok" : "";
+          els.log.innerHTML = `<span class="${cls}">${escapeHtml(message)}</span>`;
+        }
 
-    ["dragleave", "drop"].forEach(type => {
-      els.dropZone.addEventListener(type, e => {
-        e.preventDefault();
-        els.dropZone.classList.remove("drag");
-      });
-    });
+        function isCodexExportMode() {
+          return els.exportFormat.value === "codex/zip";
+        }
 
-    els.dropZone.addEventListener("drop", e => addFiles(e.dataTransfer.files));
+        function applyPreviewZoom() {
+          const zoom = Math.max(
+            0.001,
+            Math.min(6, Number(state.previewZoom) || 1),
+          );
+          state.previewZoom = zoom;
+          els.zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+          els.canvas.style.width = `${Math.max(1, Math.round(els.canvas.width * zoom))}px`;
+          els.canvas.style.height = `${Math.max(1, Math.round(els.canvas.height * zoom))}px`;
+        }
 
-    els.canvasHolder.addEventListener("wheel", e => {
-      if (e.ctrlKey || e.metaKey) {
-        setPreviewZoom(state.previewZoom - e.deltaY * 0.0025);
-        e.preventDefault();
-        return;
-      }
-      if (!els.canvasHolder.scrollHeight || !els.canvasHolder.scrollWidth) return;
-      if (e.shiftKey) {
-        els.canvasHolder.scrollLeft += e.deltaY;
-        e.preventDefault();
-        return;
-      }
+        function setPreviewZoom(value) {
+          state.previewZoom = Math.max(0.001, Math.min(6, Number(value) || 1));
+          applyPreviewZoom();
+        }
 
-      if (e.deltaY !== 0) {
-        els.canvasHolder.scrollTop += e.deltaY;
-        e.preventDefault();
-      }
-      if (e.deltaX !== 0) {
-        els.canvasHolder.scrollLeft += e.deltaX;
-      }
-    }, { passive: false });
+        function showReorderView() {
+          els.sidebarTitle.textContent = "Reorder";
+          els.reorderView.hidden = false;
+          els.editView.hidden = true;
+        }
 
-    [
-      "layoutMode", "alignMode", "stripPadding", "normalizeEnabled", "normalizeTarget",
-      "customNormalize", "trimTransparent", "removeChecker", "cleanupMode", "codexCellPadding"
-    ].forEach(id => els[id].addEventListener("change", () => scheduleRebuild(120)));
+        function showEditView() {
+          els.sidebarTitle.textContent = "Adjust sprite strip";
+          els.reorderView.hidden = true;
+          els.editView.hidden = false;
+        }
 
-    els.exportFormat.addEventListener("change", () => {
-      renderList();
-      updateExportModeUI();
-    });
+        function updateExportModeUI() {
+          els.codexOrderPanel.hidden = !isCodexExportMode();
+          updateStats();
+        }
 
-    els.zoomOutBtn.addEventListener("click", () => setPreviewZoom(state.previewZoom - 0.25));
-    els.zoomInBtn.addEventListener("click", () => setPreviewZoom(state.previewZoom + 0.25));
-    els.zoomResetBtn.addEventListener("click", () => setPreviewZoom(1));
+        function syncBusy() {
+          els.canvasShell.classList.toggle("busy", state.busyReasons.size > 0);
+        }
 
-    els.tolerance.addEventListener("input", () => {
-      els.tolLabel.textContent = els.tolerance.value;
-      scheduleRebuild(520);
-    });
+        function setBusy(on, reason = "generic") {
+          if (on) state.busyReasons.add(reason);
+          else state.busyReasons.delete(reason);
+          syncBusy();
+        }
 
-    els.quality.addEventListener("input", () => {
-      els.qualityLabel.textContent = Number(els.quality.value).toFixed(2);
-    });
+        function scheduleRebuild(delay = 120) {
+          clearTimeout(state.rebuildTimer);
+          setBusy(true, "rebuild");
+          state.rebuildTimer = setTimeout(() => {
+            requestAnimationFrame(() => {
+              try {
+                rebuildNow();
+              } finally {
+                state.rebuildTimer = null;
+                setBusy(false, "rebuild");
+              }
+            });
+          }, delay);
+        }
 
-    els.rebuildBtn.addEventListener("click", () => scheduleRebuild(0));
-    els.clearBtn.addEventListener("click", clearAll);
-    els.helpBtn.addEventListener("click", () => els.helpDialog.showModal());
-    els.downloadBtn.addEventListener("click", exportSelected);
-    els.downloadJsonBtn.addEventListener("click", downloadMetadata);
+        function setupEvents() {
+          els.dropZone.addEventListener("click", () => els.fileInput.click());
+          els.fileInput.addEventListener("change", (e) =>
+            addFiles(e.target.files),
+          );
 
-    ["editScale", "editOffsetX", "editOffsetY", "editSourceFrames"].forEach(id => {
-      els[id].addEventListener("input", applyItemDialogChanges);
-    });
+          ["dragenter", "dragover"].forEach((type) => {
+            els.dropZone.addEventListener(type, (e) => {
+              e.preventDefault();
+              els.dropZone.classList.add("drag");
+            });
+          });
 
-    els.resetItemBtn.addEventListener("click", e => {
-      e.preventDefault();
-      const item = getEditingItem();
-      if (!item) return;
-      item.scalePct = 100;
-      item.offsetX = 0;
-      item.offsetY = 0;
-      item.sourceFrames = 8;
-      populateItemDialog(item);
-      renderList();
-      scheduleRebuild(120);
-    });
+          ["dragleave", "drop"].forEach((type) => {
+            els.dropZone.addEventListener(type, (e) => {
+              e.preventDefault();
+              els.dropZone.classList.remove("drag");
+            });
+          });
 
-    els.closeItemBtn.addEventListener("click", e => {
-      e.preventDefault();
-      hideItemPanel();
-    });
+          els.dropZone.addEventListener("drop", (e) =>
+            addFiles(e.dataTransfer.files),
+          );
 
-    els.backToListBtn.addEventListener("click", e => {
-      e.preventDefault();
-      hideItemPanel();
-    });
-  }
+          els.canvasHolder.addEventListener(
+            "wheel",
+            (e) => {
+              if (e.ctrlKey || e.metaKey) {
+                setPreviewZoom(state.previewZoom - e.deltaY * 0.0025);
+                e.preventDefault();
+                return;
+              }
+              if (
+                !els.canvasHolder.scrollHeight ||
+                !els.canvasHolder.scrollWidth
+              )
+                return;
+              if (e.shiftKey) {
+                els.canvasHolder.scrollLeft += e.deltaY;
+                e.preventDefault();
+                return;
+              }
 
-  function renderCodexOrderLegend() {
-    els.codexOrderLegend.innerHTML = CODEX_STATES.map((state, index) => `
+              if (e.deltaY !== 0) {
+                els.canvasHolder.scrollTop += e.deltaY;
+                e.preventDefault();
+              }
+              if (e.deltaX !== 0) {
+                els.canvasHolder.scrollLeft += e.deltaX;
+              }
+            },
+            { passive: false },
+          );
+
+          [
+            "layoutMode",
+            "alignMode",
+            "stripPadding",
+            "normalizeEnabled",
+            "normalizeTarget",
+            "customNormalize",
+            "trimTransparent",
+            "removeChecker",
+            "cleanupMode",
+            "codexCellPadding",
+          ].forEach((id) =>
+            els[id].addEventListener("change", () => scheduleRebuild(120)),
+          );
+
+          els.exportFormat.addEventListener("change", () => {
+            renderList();
+            updateExportModeUI();
+          });
+
+          els.zoomOutBtn.addEventListener("click", () =>
+            setPreviewZoom(state.previewZoom - 0.25),
+          );
+          els.zoomInBtn.addEventListener("click", () =>
+            setPreviewZoom(state.previewZoom + 0.25),
+          );
+          els.zoomResetBtn.addEventListener("click", () => setPreviewZoom(1));
+
+          els.tolerance.addEventListener("input", () => {
+            els.tolLabel.textContent = els.tolerance.value;
+            scheduleRebuild(520);
+          });
+
+          els.quality.addEventListener("input", () => {
+            els.qualityLabel.textContent = Number(els.quality.value).toFixed(2);
+          });
+
+          els.rebuildBtn.addEventListener("click", () => scheduleRebuild(0));
+          els.clearBtn.addEventListener("click", clearAll);
+          els.helpBtn.addEventListener("click", () =>
+            els.helpDialog.showModal(),
+          );
+          els.downloadBtn.addEventListener("click", exportSelected);
+          els.downloadJsonBtn.addEventListener("click", downloadMetadata);
+
+          [
+            "editScale",
+            "editOffsetX",
+            "editOffsetY",
+            "editSourceFrames",
+          ].forEach((id) => {
+            els[id].addEventListener("input", applyItemDialogChanges);
+          });
+
+          els.resetItemBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            const item = getEditingItem();
+            if (!item) return;
+            item.scalePct = 100;
+            item.offsetX = 0;
+            item.offsetY = 0;
+            item.sourceFrames = 8;
+            populateItemDialog(item);
+            renderList();
+            scheduleRebuild(120);
+          });
+
+          els.closeItemBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            hideItemPanel();
+          });
+
+          els.backToListBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            hideItemPanel();
+          });
+        }
+
+        function renderCodexOrderLegend() {
+          els.codexOrderLegend.innerHTML = CODEX_STATES.map(
+            (state, index) => `
       <div>
         <strong>${index + 1}.</strong>
         <span>${escapeHtml(state.label)}</span>
       </div>
-    `).join("");
-  }
-
-  async function addFiles(fileList) {
-    const files = [...fileList].filter(f => f.type.startsWith("image/"));
-    if (!files.length) return;
-
-    setBusy(true, "load");
-    log(`Loading ${files.length} image${files.length === 1 ? "" : "s"}...`);
-
-    try {
-      for (const file of files) {
-        try {
-          const bitmap = await createImageBitmap(file);
-          state.items.push({
-            id: makeId(),
-            name: file.name,
-            bitmap,
-            width: bitmap.width,
-            height: bitmap.height,
-            scalePct: 100,
-            offsetX: 0,
-            offsetY: 0,
-            sourceFrames: 8
-          });
-        } catch (err) {
-          console.warn(err);
-          log(`Could not load ${file.name}`, "warn");
+    `,
+          ).join("");
         }
-      }
 
-      renderList();
-      rebuildNow();
-    } finally {
-      setBusy(false, "load");
-    }
-  }
+        async function addFiles(fileList) {
+          const files = [...fileList].filter((f) =>
+            f.type.startsWith("image/"),
+          );
+          if (!files.length) return;
 
-  function renderList() {
-    els.list.innerHTML = "";
+          setBusy(true, "load");
+          log(
+            `Loading ${files.length} image${files.length === 1 ? "" : "s"}...`,
+          );
 
-    if (!state.items.length) {
-      els.list.innerHTML = `<div class="hint">No strips loaded yet.</div>`;
-      return;
-    }
+          try {
+            for (const file of files) {
+              try {
+                const bitmap = await createImageBitmap(file);
+                state.items.push({
+                  id: makeId(),
+                  name: file.name,
+                  bitmap,
+                  width: bitmap.width,
+                  height: bitmap.height,
+                  scalePct: 100,
+                  offsetX: 0,
+                  offsetY: 0,
+                  sourceFrames: 8,
+                });
+              } catch (err) {
+                console.warn(err);
+                log(`Could not load ${file.name}`, "warn");
+              }
+            }
 
-    state.items.forEach((item, index) => {
-      const row = document.createElement("div");
-      row.className = "item";
-      row.draggable = true;
-      row.dataset.id = item.id;
+            renderList();
+            rebuildNow();
+          } finally {
+            setBusy(false, "load");
+          }
+        }
 
-      const handle = document.createElement("div");
-      handle.className = "handle";
-      handle.textContent = "≡";
+        function renderList() {
+          els.list.innerHTML = "";
 
-      const thumb = document.createElement("canvas");
-      thumb.className = "thumb";
-      thumb.width = 116;
-      thumb.height = 88;
-      const tctx = thumb.getContext("2d");
-      tctx.clearRect(0, 0, thumb.width, thumb.height);
-      const scale = Math.min(thumb.width / item.width, thumb.height / item.height);
-      const w = Math.max(1, Math.round(item.width * scale));
-      const h = Math.max(1, Math.round(item.height * scale));
-      tctx.drawImage(item.bitmap, (thumb.width - w) / 2, (thumb.height - h) / 2, w, h);
+          if (!state.items.length) {
+            els.list.innerHTML = `<div class="hint">No strips loaded yet.</div>`;
+            return;
+          }
 
-      const codexState = CODEX_STATES[index];
-      const codexText = codexState
-        ? `<strong>${index + 1}. ${codexState.label}</strong> · ${codexState.frames} used frames`
-        : `<span class="warn">Ignored by Codex export</span>`;
+          state.items.forEach((item, index) => {
+            const row = document.createElement("div");
+            row.className = "item";
+            row.draggable = true;
+            row.dataset.id = item.id;
 
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.innerHTML = `
+            const handle = document.createElement("div");
+            handle.className = "handle";
+            handle.textContent = "≡";
+
+            const thumb = document.createElement("canvas");
+            thumb.className = "thumb";
+            thumb.width = 116;
+            thumb.height = 88;
+            const tctx = thumb.getContext("2d");
+            tctx.clearRect(0, 0, thumb.width, thumb.height);
+            const scale = Math.min(
+              thumb.width / item.width,
+              thumb.height / item.height,
+            );
+            const w = Math.max(1, Math.round(item.width * scale));
+            const h = Math.max(1, Math.round(item.height * scale));
+            tctx.drawImage(
+              item.bitmap,
+              (thumb.width - w) / 2,
+              (thumb.height - h) / 2,
+              w,
+              h,
+            );
+
+            const codexState = CODEX_STATES[index];
+            const codexText = codexState
+              ? `<strong>${index + 1}. ${codexState.label}</strong> · ${codexState.frames} used frames`
+              : `<span class="warn">Ignored by Codex export</span>`;
+
+            const meta = document.createElement("div");
+            meta.className = "meta";
+            meta.innerHTML = `
         <div class="name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
         <div class="dims">${item.width}×${item.height}px · scale ${item.scalePct}% · source frames ${item.sourceFrames}</div>
         <div class="row-note">${codexText}</div>
       `;
 
-      const buttons = document.createElement("div");
-      buttons.className = "tiny-buttons";
-      buttons.innerHTML = `
+            const buttons = document.createElement("div");
+            buttons.className = "tiny-buttons";
+            buttons.innerHTML = `
         <button title="Edit size and Codex frame count">Edit</button>
         <button title="Move up" ${index === 0 ? "disabled" : ""}>↑</button>
         <button title="Move down" ${index === state.items.length - 1 ? "disabled" : ""}>↓</button>
         <button title="Remove">×</button>
       `;
-      buttons.children[0].addEventListener("click", () => openItemDialog(item.id));
-      buttons.children[1].addEventListener("click", () => moveItem(index, index - 1));
-      buttons.children[2].addEventListener("click", () => moveItem(index, index + 1));
-      buttons.children[3].addEventListener("click", () => removeItem(index));
+            buttons.children[0].addEventListener("click", () =>
+              openItemDialog(item.id),
+            );
+            buttons.children[1].addEventListener("click", () =>
+              moveItem(index, index - 1),
+            );
+            buttons.children[2].addEventListener("click", () =>
+              moveItem(index, index + 1),
+            );
+            buttons.children[3].addEventListener("click", () =>
+              removeItem(index),
+            );
 
-      row.append(handle, thumb, meta, buttons);
-      els.list.appendChild(row);
+            row.append(handle, thumb, meta, buttons);
+            els.list.appendChild(row);
 
-      row.addEventListener("dragstart", e => {
-        row.classList.add("dragging");
-        e.dataTransfer.setData("text/plain", item.id);
-      });
+            row.addEventListener("dragstart", (e) => {
+              row.classList.add("dragging");
+              e.dataTransfer.setData("text/plain", item.id);
+            });
 
-      row.addEventListener("dragend", () => row.classList.remove("dragging"));
+            row.addEventListener("dragend", () =>
+              row.classList.remove("dragging"),
+            );
 
-      row.addEventListener("dragover", e => e.preventDefault());
+            row.addEventListener("dragover", (e) => e.preventDefault());
 
-      row.addEventListener("drop", e => {
-        e.preventDefault();
-        const draggingId = e.dataTransfer.getData("text/plain");
-        const from = state.items.findIndex(x => x.id === draggingId);
-        const to = state.items.findIndex(x => x.id === item.id);
-        if (from >= 0 && to >= 0 && from !== to) moveItem(from, to);
-      });
-    });
-  }
+            row.addEventListener("drop", (e) => {
+              e.preventDefault();
+              const draggingId = e.dataTransfer.getData("text/plain");
+              const from = state.items.findIndex((x) => x.id === draggingId);
+              const to = state.items.findIndex((x) => x.id === item.id);
+              if (from >= 0 && to >= 0 && from !== to) moveItem(from, to);
+            });
+          });
+        }
 
-  function moveItem(from, to) {
-    if (to < 0 || to >= state.items.length) return;
-    const [item] = state.items.splice(from, 1);
-    state.items.splice(to, 0, item);
-    renderList();
-    refreshItemPanel();
-    scheduleRebuild(80);
-  }
+        function moveItem(from, to) {
+          if (to < 0 || to >= state.items.length) return;
+          const [item] = state.items.splice(from, 1);
+          state.items.splice(to, 0, item);
+          renderList();
+          refreshItemPanel();
+          scheduleRebuild(80);
+        }
 
-  function removeItem(index) {
-    const removedId = state.items[index]?.id || null;
-    state.items.splice(index, 1);
-    renderList();
-    if (state.editItemId === removedId) hideItemPanel();
-    else refreshItemPanel();
-    scheduleRebuild(80);
-  }
+        function removeItem(index) {
+          const removedId = state.items[index]?.id || null;
+          state.items.splice(index, 1);
+          renderList();
+          if (state.editItemId === removedId) hideItemPanel();
+          else refreshItemPanel();
+          scheduleRebuild(80);
+        }
 
-  function clearAll() {
-    clearTimeout(state.rebuildTimer);
-    state.rebuildTimer = null;
-    state.busyReasons.clear();
-    syncBusy();
-    state.items = [];
-    state.metadata = [];
-    state.editItemId = null;
-    ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
-    els.canvas.width = 1;
-    els.canvas.height = 1;
-    applyPreviewZoom();
-    renderList();
-    hideItemPanel();
-    updateStats();
-    els.downloadBtn.disabled = true;
-    els.downloadJsonBtn.disabled = true;
-    log("Cleared.");
-  }
+        function clearAll() {
+          clearTimeout(state.rebuildTimer);
+          state.rebuildTimer = null;
+          state.busyReasons.clear();
+          syncBusy();
+          state.items = [];
+          state.metadata = [];
+          state.editItemId = null;
+          ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
+          els.canvas.width = 1;
+          els.canvas.height = 1;
+          applyPreviewZoom();
+          renderList();
+          hideItemPanel();
+          updateStats();
+          els.downloadBtn.disabled = true;
+          els.downloadJsonBtn.disabled = true;
+          log("Cleared.");
+        }
 
-  function openItemDialog(itemId) {
-    state.editItemId = itemId;
-    const item = getEditingItem();
-    if (!item) return;
-    populateItemDialog(item);
-    showEditView();
-  }
+        function openItemDialog(itemId) {
+          state.editItemId = itemId;
+          const item = getEditingItem();
+          if (!item) return;
+          populateItemDialog(item);
+          showEditView();
+        }
 
-  function getEditingItem() {
-    return state.items.find(x => x.id === state.editItemId) || null;
-  }
+        function getEditingItem() {
+          return state.items.find((x) => x.id === state.editItemId) || null;
+        }
 
-  function hideItemPanel() {
-    state.editItemId = null;
-    showReorderView();
-  }
+        function hideItemPanel() {
+          state.editItemId = null;
+          showReorderView();
+        }
 
-  function refreshItemPanel() {
-    const item = getEditingItem();
-    if (!item) return;
-    populateItemDialog(item);
-  }
+        function refreshItemPanel() {
+          const item = getEditingItem();
+          if (!item) return;
+          populateItemDialog(item);
+        }
 
-  function populateItemDialog(item) {
-    const index = state.items.findIndex(x => x.id === item.id);
-    const codexState = CODEX_STATES[index];
-    els.editName.textContent = item.name;
-    els.editScale.value = item.scalePct;
-    els.editScaleLabel.textContent = `${item.scalePct}%`;
-    els.editOffsetX.value = item.offsetX;
-    els.editOffsetY.value = item.offsetY;
-    els.editSourceFrames.value = item.sourceFrames;
-    els.editCodexState.textContent = codexState
-      ? `Position ${index + 1}: ${codexState.label} (${codexState.frames} used frames)`
-      : "Not used; Codex export only uses the first 9 loaded strips.";
-    drawItemDialogPreview(item);
-  }
+        function populateItemDialog(item) {
+          const index = state.items.findIndex((x) => x.id === item.id);
+          const codexState = CODEX_STATES[index];
+          els.editName.textContent = item.name;
+          els.editScale.value = item.scalePct;
+          els.editScaleLabel.textContent = `${item.scalePct}%`;
+          els.editOffsetX.value = item.offsetX;
+          els.editOffsetY.value = item.offsetY;
+          els.editSourceFrames.value = item.sourceFrames;
+          els.editCodexState.textContent = codexState
+            ? `Position ${index + 1}: ${codexState.label} (${codexState.frames} used frames)`
+            : "Not used; Codex export only uses the first 9 loaded strips.";
+          drawItemDialogPreview(item);
+        }
 
-  function applyItemDialogChanges() {
-    const item = getEditingItem();
-    if (!item) return;
+        function applyItemDialogChanges() {
+          const item = getEditingItem();
+          if (!item) return;
 
-    item.scalePct = clampInt(els.editScale.value, 10, 300, 100);
-    item.offsetX = clampInt(els.editOffsetX.value, -9999, 9999, 0);
-    item.offsetY = clampInt(els.editOffsetY.value, -9999, 9999, 0);
-    item.sourceFrames = clampInt(els.editSourceFrames.value, 1, 8, 8);
+          item.scalePct = clampInt(els.editScale.value, 10, 300, 100);
+          item.offsetX = clampInt(els.editOffsetX.value, -9999, 9999, 0);
+          item.offsetY = clampInt(els.editOffsetY.value, -9999, 9999, 0);
+          item.sourceFrames = clampInt(els.editSourceFrames.value, 1, 8, 8);
 
-    els.editScaleLabel.textContent = `${item.scalePct}%`;
-    drawItemDialogPreview(item);
-    renderList();
-    refreshItemPanel();
-    scheduleRebuild(180);
-  }
+          els.editScaleLabel.textContent = `${item.scalePct}%`;
+          drawItemDialogPreview(item);
+          renderList();
+          refreshItemPanel();
+          scheduleRebuild(180);
+        }
 
-  function drawItemDialogPreview(item) {
-    const c = els.editPreview;
-    const cctx = c.getContext("2d");
-    cctx.clearRect(0, 0, c.width, c.height);
-    cctx.imageSmoothingEnabled = false;
+        function drawItemDialogPreview(item) {
+          const c = els.editPreview;
+          const cctx = c.getContext("2d");
+          cctx.clearRect(0, 0, c.width, c.height);
+          cctx.imageSmoothingEnabled = false;
 
-    const scale = Math.min(c.width / item.width, c.height / item.height) * item.scalePct / 100;
-    const w = Math.max(1, Math.round(item.width * scale));
-    const h = Math.max(1, Math.round(item.height * scale));
-    const x = Math.round((c.width - w) / 2 + item.offsetX * 0.25);
-    const y = Math.round((c.height - h) / 2 + item.offsetY * 0.25);
-    cctx.drawImage(item.bitmap, x, y, w, h);
-  }
+          const scale =
+            (Math.min(c.width / item.width, c.height / item.height) *
+              item.scalePct) /
+            100;
+          const w = Math.max(1, Math.round(item.width * scale));
+          const h = Math.max(1, Math.round(item.height * scale));
+          const x = Math.round((c.width - w) / 2 + item.offsetX * 0.25);
+          const y = Math.round((c.height - h) / 2 + item.offsetY * 0.25);
+          cctx.drawImage(item.bitmap, x, y, w, h);
+        }
 
-  function clampInt(value, min, max, fallback) {
-    const n = parseInt(value, 10);
-    if (!Number.isFinite(n)) return fallback;
-    return Math.max(min, Math.min(max, n));
-  }
+        function clampInt(value, min, max, fallback) {
+          const n = parseInt(value, 10);
+          if (!Number.isFinite(n)) return fallback;
+          return Math.max(min, Math.min(max, n));
+        }
 
-  function rebuildNow() {
-    if (!state.items.length) {
-      updateStats();
-      els.downloadBtn.disabled = true;
-      els.downloadJsonBtn.disabled = true;
-      return;
-    }
+        function rebuildNow() {
+          if (!state.items.length) {
+            updateStats();
+            els.downloadBtn.disabled = true;
+            els.downloadJsonBtn.disabled = true;
+            return;
+          }
 
-    const processed = state.items.map(processBaseItem);
-    const normalized = normalizeItems(processed);
-    const transformed = normalized.map(applyItemTransform);
-    buildNormalAtlas(transformed);
+          const processed = state.items.map(processBaseItem);
+          const normalized = normalizeItems(processed);
+          const transformed = normalized.map(applyItemTransform);
+          buildNormalAtlas(transformed);
 
-    els.downloadBtn.disabled = false;
-    els.downloadJsonBtn.disabled = false;
-    applyPreviewZoom();
-  }
+          els.downloadBtn.disabled = false;
+          els.downloadJsonBtn.disabled = false;
+          applyPreviewZoom();
+        }
 
-  function processBaseItem(item) {
-    const c = document.createElement("canvas");
-    c.width = item.width;
-    c.height = item.height;
-    const cctx = c.getContext("2d", { willReadFrequently: true });
-    cctx.drawImage(item.bitmap, 0, 0);
+        function processBaseItem(item) {
+          const c = document.createElement("canvas");
+          c.width = item.width;
+          c.height = item.height;
+          const cctx = c.getContext("2d", { willReadFrequently: true });
+          cctx.drawImage(item.bitmap, 0, 0);
 
-    let cleanupInfo = null;
+          let cleanupInfo = null;
 
-    if (els.removeChecker.checked) {
-      const img = cctx.getImageData(0, 0, c.width, c.height);
-      cleanupInfo = removeFakeChecker(img, c.width, c.height, Number(els.tolerance.value), els.cleanupMode.value);
-      cctx.putImageData(img, 0, 0);
-    }
+          if (els.removeChecker.checked) {
+            const img = cctx.getImageData(0, 0, c.width, c.height);
+            cleanupInfo = removeFakeChecker(
+              img,
+              c.width,
+              c.height,
+              Number(els.tolerance.value),
+              els.cleanupMode.value,
+            );
+            cctx.putImageData(img, 0, 0);
+          }
 
-    let finalCanvas = c;
+          let finalCanvas = c;
 
-    if (els.trimTransparent.checked) {
-      finalCanvas = trimCanvas(c);
-    }
+          if (els.trimTransparent.checked) {
+            finalCanvas = trimCanvas(c);
+          }
 
-    return {
-      ...item,
-      canvas: finalCanvas,
-      processedWidth: finalCanvas.width,
-      processedHeight: finalCanvas.height,
-      cleanupInfo
-    };
-  }
+          return {
+            ...item,
+            canvas: finalCanvas,
+            processedWidth: finalCanvas.width,
+            processedHeight: finalCanvas.height,
+            cleanupInfo,
+          };
+        }
 
-  function normalizeItems(items) {
-    if (!els.normalizeEnabled.checked) return items;
+        function normalizeItems(items) {
+          if (!els.normalizeEnabled.checked) return items;
 
-    const layout = els.layoutMode.value;
-    const dimension = layout === "vertical" ? "processedHeight" : "processedWidth";
-    const values = items.map(x => x[dimension]).filter(Boolean);
-    if (!values.length) return items;
+          const layout = els.layoutMode.value;
+          const dimension =
+            layout === "vertical" ? "processedHeight" : "processedWidth";
+          const values = items.map((x) => x[dimension]).filter(Boolean);
+          if (!values.length) return items;
 
-    let target;
-    if (els.normalizeTarget.value === "max") target = Math.max(...values);
-    else if (els.normalizeTarget.value === "min") target = Math.max(1, Math.min(...values));
-    else target = Math.max(1, Number(els.customNormalize.value) || 1);
+          let target;
+          if (els.normalizeTarget.value === "max") target = Math.max(...values);
+          else if (els.normalizeTarget.value === "min")
+            target = Math.max(1, Math.min(...values));
+          else target = Math.max(1, Number(els.customNormalize.value) || 1);
 
-    return items.map(item => {
-      const source = item.canvas;
-      let w, h;
+          return items.map((item) => {
+            const source = item.canvas;
+            let w, h;
 
-      if (layout === "vertical") {
-        const scale = target / source.height;
-        h = target;
-        w = Math.max(1, Math.round(source.width * scale));
-      } else {
-        const scale = target / source.width;
-        w = target;
-        h = Math.max(1, Math.round(source.height * scale));
-      }
+            if (layout === "vertical") {
+              const scale = target / source.height;
+              h = target;
+              w = Math.max(1, Math.round(source.width * scale));
+            } else {
+              const scale = target / source.width;
+              w = target;
+              h = Math.max(1, Math.round(source.height * scale));
+            }
 
-      const c = document.createElement("canvas");
-      c.width = w;
-      c.height = h;
-      const cctx = c.getContext("2d");
-      cctx.imageSmoothingEnabled = false;
-      cctx.drawImage(source, 0, 0, w, h);
+            const c = document.createElement("canvas");
+            c.width = w;
+            c.height = h;
+            const cctx = c.getContext("2d");
+            cctx.imageSmoothingEnabled = false;
+            cctx.drawImage(source, 0, 0, w, h);
 
-      return {
-        ...item,
-        canvas: c,
-        processedWidth: w,
-        processedHeight: h,
-        normalized: true
-      };
-    });
-  }
+            return {
+              ...item,
+              canvas: c,
+              processedWidth: w,
+              processedHeight: h,
+              normalized: true,
+            };
+          });
+        }
 
-  function applyItemTransform(item) {
-    const scale = Math.max(0.01, item.scalePct / 100);
-    const source = item.canvas;
-    const scaledW = Math.max(1, Math.round(source.width * scale));
-    const scaledH = Math.max(1, Math.round(source.height * scale));
+        function applyItemTransform(item) {
+          const scale = Math.max(0.01, item.scalePct / 100);
+          const source = item.canvas;
+          const scaledW = Math.max(1, Math.round(source.width * scale));
+          const scaledH = Math.max(1, Math.round(source.height * scale));
 
-    const marginLeft = item.offsetX > 0 ? item.offsetX : 0;
-    const marginRight = item.offsetX < 0 ? -item.offsetX : 0;
-    const marginTop = item.offsetY > 0 ? item.offsetY : 0;
-    const marginBottom = item.offsetY < 0 ? -item.offsetY : 0;
+          const marginLeft = item.offsetX > 0 ? item.offsetX : 0;
+          const marginRight = item.offsetX < 0 ? -item.offsetX : 0;
+          const marginTop = item.offsetY > 0 ? item.offsetY : 0;
+          const marginBottom = item.offsetY < 0 ? -item.offsetY : 0;
 
-    const c = document.createElement("canvas");
-    c.width = Math.max(1, scaledW + marginLeft + marginRight);
-    c.height = Math.max(1, scaledH + marginTop + marginBottom);
-    const cctx = c.getContext("2d");
-    cctx.imageSmoothingEnabled = false;
-    cctx.drawImage(source, marginLeft, marginTop, scaledW, scaledH);
+          const c = document.createElement("canvas");
+          c.width = Math.max(1, scaledW + marginLeft + marginRight);
+          c.height = Math.max(1, scaledH + marginTop + marginBottom);
+          const cctx = c.getContext("2d");
+          cctx.imageSmoothingEnabled = false;
+          cctx.drawImage(source, marginLeft, marginTop, scaledW, scaledH);
 
-    return {
-      ...item,
-      canvas: c,
-      processedWidth: c.width,
-      processedHeight: c.height
-    };
-  }
+          return {
+            ...item,
+            canvas: c,
+            processedWidth: c.width,
+            processedHeight: c.height,
+          };
+        }
 
-  function buildNormalAtlas(items) {
-    const layout = els.layoutMode.value;
-    const align = els.alignMode.value;
-    const padding = Math.max(0, Number(els.stripPadding.value) || 0);
+        function buildNormalAtlas(items) {
+          const layout = els.layoutMode.value;
+          const align = els.alignMode.value;
+          const padding = Math.max(0, Number(els.stripPadding.value) || 0);
 
-    let width;
-    let height;
+          let width;
+          let height;
 
-    if (layout === "vertical") {
-      width = Math.max(...items.map(x => x.processedWidth));
-      height = items.reduce((sum, x) => sum + x.processedHeight, 0) + padding * Math.max(0, items.length - 1);
-    } else {
-      width = items.reduce((sum, x) => sum + x.processedWidth, 0) + padding * Math.max(0, items.length - 1);
-      height = Math.max(...items.map(x => x.processedHeight));
-    }
+          if (layout === "vertical") {
+            width = Math.max(...items.map((x) => x.processedWidth));
+            height =
+              items.reduce((sum, x) => sum + x.processedHeight, 0) +
+              padding * Math.max(0, items.length - 1);
+          } else {
+            width =
+              items.reduce((sum, x) => sum + x.processedWidth, 0) +
+              padding * Math.max(0, items.length - 1);
+            height = Math.max(...items.map((x) => x.processedHeight));
+          }
 
-    els.canvas.width = Math.max(1, width);
-    els.canvas.height = Math.max(1, height);
-    ctx.clearRect(0, 0, width, height);
-    ctx.imageSmoothingEnabled = false;
+          els.canvas.width = Math.max(1, width);
+          els.canvas.height = Math.max(1, height);
+          ctx.clearRect(0, 0, width, height);
+          ctx.imageSmoothingEnabled = false;
 
-    let x = 0;
-    let y = 0;
-    state.metadata = [];
+          let x = 0;
+          let y = 0;
+          state.metadata = [];
 
-    for (const [index, item] of items.entries()) {
-      let drawX = x;
-      let drawY = y;
+          for (const [index, item] of items.entries()) {
+            let drawX = x;
+            let drawY = y;
 
-      if (layout === "vertical") {
-        drawX = alignedOffset(width, item.processedWidth, align);
-      } else {
-        drawY = alignedOffset(height, item.processedHeight, align);
-      }
+            if (layout === "vertical") {
+              drawX = alignedOffset(width, item.processedWidth, align);
+            } else {
+              drawY = alignedOffset(height, item.processedHeight, align);
+            }
 
-      ctx.drawImage(item.canvas, drawX, drawY);
+            ctx.drawImage(item.canvas, drawX, drawY);
 
-      state.metadata.push({
-        name: item.name,
-        index,
-        x: drawX,
-        y: drawY,
-        width: item.processedWidth,
-        height: item.processedHeight,
-        sourceWidth: item.width,
-        sourceHeight: item.height,
-        scalePct: item.scalePct,
-        offsetX: item.offsetX,
-        offsetY: item.offsetY,
-        normalized: !!item.normalized,
-        checkerCleanup: item.cleanupInfo || null
-      });
+            state.metadata.push({
+              name: item.name,
+              index,
+              x: drawX,
+              y: drawY,
+              width: item.processedWidth,
+              height: item.processedHeight,
+              sourceWidth: item.width,
+              sourceHeight: item.height,
+              scalePct: item.scalePct,
+              offsetX: item.offsetX,
+              offsetY: item.offsetY,
+              normalized: !!item.normalized,
+              checkerCleanup: item.cleanupInfo || null,
+            });
 
-      if (layout === "vertical") y += item.processedHeight + padding;
-      else x += item.processedWidth + padding;
-    }
+            if (layout === "vertical") y += item.processedHeight + padding;
+            else x += item.processedWidth + padding;
+          }
 
-    updateStats();
-    const cleanedCount = state.metadata.filter(x => x.checkerCleanup && x.checkerCleanup.removedPixels > 0).length;
-    log(`Built atlas. ${cleanedCount} image${cleanedCount === 1 ? "" : "s"} had checker-like pixels removed.`, "ok");
-  }
+          updateStats();
+          const cleanedCount = state.metadata.filter(
+            (x) => x.checkerCleanup && x.checkerCleanup.removedPixels > 0,
+          ).length;
+          log(
+            `Built atlas. ${cleanedCount} image${cleanedCount === 1 ? "" : "s"} had checker-like pixels removed.`,
+            "ok",
+          );
+        }
 
-  function buildCodexAtlasIntoCanvas(targetCanvas) {
-    targetCanvas.width = CODEX_WIDTH;
-    targetCanvas.height = CODEX_HEIGHT;
-    const tctx = targetCanvas.getContext("2d", { willReadFrequently: true });
-    tctx.clearRect(0, 0, CODEX_WIDTH, CODEX_HEIGHT);
-    tctx.imageSmoothingEnabled = false;
+        function buildCodexAtlasIntoCanvas(targetCanvas) {
+          targetCanvas.width = CODEX_WIDTH;
+          targetCanvas.height = CODEX_HEIGHT;
+          const tctx = targetCanvas.getContext("2d", {
+            willReadFrequently: true,
+          });
+          tctx.clearRect(0, 0, CODEX_WIDTH, CODEX_HEIGHT);
+          tctx.imageSmoothingEnabled = false;
 
-    for (let row = 0; row < CODEX_ROWS; row++) {
-      const item = state.items[row];
-      const codexState = CODEX_STATES[row];
+          for (let row = 0; row < CODEX_ROWS; row++) {
+            const item = state.items[row];
+            const codexState = CODEX_STATES[row];
 
-      if (!item) continue;
+            if (!item) continue;
 
-      const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
-      const sourceFrames = clampInt(item.sourceFrames, 1, 8, 8);
-      const sourceFrameW = cleanedStrip.width / sourceFrames;
-      const sourceFrameH = cleanedStrip.height;
-      const innerPadding = Math.max(0, Math.min(80, Number(els.codexCellPadding.value) || 0));
+            const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
+            const sourceFrames = clampInt(item.sourceFrames, 1, 8, 8);
+            const sourceFrameW = cleanedStrip.width / sourceFrames;
+            const sourceFrameH = cleanedStrip.height;
+            const innerPadding = Math.max(
+              0,
+              Math.min(80, Number(els.codexCellPadding.value) || 0),
+            );
 
-      for (let col = 0; col < codexState.frames; col++) {
-        const sourceCol = Math.min(col, sourceFrames - 1);
-        const frame = document.createElement("canvas");
-        frame.width = Math.max(1, Math.round(sourceFrameW));
-        frame.height = Math.max(1, Math.round(sourceFrameH));
-        const fctx = frame.getContext("2d", { willReadFrequently: true });
-        fctx.imageSmoothingEnabled = false;
-        fctx.drawImage(
-          cleanedStrip,
-          sourceCol * sourceFrameW, 0, sourceFrameW, sourceFrameH,
-          0, 0, frame.width, frame.height
-        );
+            for (let col = 0; col < codexState.frames; col++) {
+              const sourceCol = Math.min(col, sourceFrames - 1);
+              const frame = document.createElement("canvas");
+              frame.width = Math.max(1, Math.round(sourceFrameW));
+              frame.height = Math.max(1, Math.round(sourceFrameH));
+              const fctx = frame.getContext("2d", { willReadFrequently: true });
+              fctx.imageSmoothingEnabled = false;
+              fctx.drawImage(
+                cleanedStrip,
+                sourceCol * sourceFrameW,
+                0,
+                sourceFrameW,
+                sourceFrameH,
+                0,
+                0,
+                frame.width,
+                frame.height,
+              );
 
-        const frameToDraw = els.trimTransparent.checked ? trimCanvas(frame) : frame;
-        drawFrameIntoCodexCell(tctx, frameToDraw, row, col, item, innerPadding);
-      }
-    }
-  }
+              const frameToDraw = els.trimTransparent.checked
+                ? trimCanvas(frame)
+                : frame;
+              drawFrameIntoCodexCell(
+                tctx,
+                frameToDraw,
+                row,
+                col,
+                item,
+                innerPadding,
+              );
+            }
+          }
+        }
 
-  function buildCodexMetadata() {
-    const metadata = [];
+        function buildCodexMetadata() {
+          const metadata = [];
 
-    for (let row = 0; row < CODEX_ROWS; row++) {
-      const item = state.items[row];
-      const codexState = CODEX_STATES[row];
+          for (let row = 0; row < CODEX_ROWS; row++) {
+            const item = state.items[row];
+            const codexState = CODEX_STATES[row];
 
-      if (!item) {
-        metadata.push({
+            if (!item) {
+              metadata.push({
+                row,
+                state: codexState.name,
+                label: codexState.label,
+                usedFrames: codexState.frames,
+                source: null,
+                transparent: true,
+              });
+              continue;
+            }
+
+            metadata.push({
+              row,
+              state: codexState.name,
+              label: codexState.label,
+              usedFrames: codexState.frames,
+              sourceFrames: clampInt(item.sourceFrames, 1, 8, 8),
+              source: item.name,
+              x: 0,
+              y: row * CODEX_FRAME_H,
+              width: CODEX_WIDTH,
+              height: CODEX_FRAME_H,
+              cellWidth: CODEX_FRAME_W,
+              cellHeight: CODEX_FRAME_H,
+              scalePct: item.scalePct,
+              offsetX: item.offsetX,
+              offsetY: item.offsetY,
+            });
+          }
+
+          return metadata;
+        }
+
+        function makeCleanCanvasFromBitmap(bitmap) {
+          const c = document.createElement("canvas");
+          c.width = bitmap.width;
+          c.height = bitmap.height;
+          const cctx = c.getContext("2d", { willReadFrequently: true });
+          cctx.drawImage(bitmap, 0, 0);
+
+          if (els.removeChecker.checked) {
+            const img = cctx.getImageData(0, 0, c.width, c.height);
+            removeFakeChecker(
+              img,
+              c.width,
+              c.height,
+              Number(els.tolerance.value),
+              els.cleanupMode.value,
+            );
+            cctx.putImageData(img, 0, 0);
+          }
+
+          return c;
+        }
+
+        function drawFrameIntoCodexCell(
+          targetCtx,
+          frame,
           row,
-          state: codexState.name,
-          label: codexState.label,
-          usedFrames: codexState.frames,
-          source: null,
-          transparent: true
-        });
-        continue;
-      }
-
-      metadata.push({
-        row,
-        state: codexState.name,
-        label: codexState.label,
-        usedFrames: codexState.frames,
-        sourceFrames: clampInt(item.sourceFrames, 1, 8, 8),
-        source: item.name,
-        x: 0,
-        y: row * CODEX_FRAME_H,
-        width: CODEX_WIDTH,
-        height: CODEX_FRAME_H,
-        cellWidth: CODEX_FRAME_W,
-        cellHeight: CODEX_FRAME_H,
-        scalePct: item.scalePct,
-        offsetX: item.offsetX,
-        offsetY: item.offsetY
-      });
-    }
-
-    return metadata;
-  }
-
-  function makeCleanCanvasFromBitmap(bitmap) {
-    const c = document.createElement("canvas");
-    c.width = bitmap.width;
-    c.height = bitmap.height;
-    const cctx = c.getContext("2d", { willReadFrequently: true });
-    cctx.drawImage(bitmap, 0, 0);
-
-    if (els.removeChecker.checked) {
-      const img = cctx.getImageData(0, 0, c.width, c.height);
-      removeFakeChecker(img, c.width, c.height, Number(els.tolerance.value), els.cleanupMode.value);
-      cctx.putImageData(img, 0, 0);
-    }
-
-    return c;
-  }
-
-  function drawFrameIntoCodexCell(targetCtx, frame, row, col, item, innerPadding) {
-    const maxW = Math.max(1, CODEX_FRAME_W - innerPadding * 2);
-    const maxH = Math.max(1, CODEX_FRAME_H - innerPadding * 2);
-    const fit = Math.min(maxW / frame.width, maxH / frame.height);
-    const scale = fit * Math.max(0.01, item.scalePct / 100);
-    const w = Math.max(1, Math.round(frame.width * scale));
-    const h = Math.max(1, Math.round(frame.height * scale));
-    const x = col * CODEX_FRAME_W + Math.round((CODEX_FRAME_W - w) / 2 + item.offsetX);
-    const y = row * CODEX_FRAME_H + Math.round((CODEX_FRAME_H - h) / 2 + item.offsetY);
-    targetCtx.drawImage(frame, x, y, w, h);
-  }
-
-  function alignedOffset(total, size, align) {
-    if (align === "center") return Math.floor((total - size) / 2);
-    if (align === "end") return total - size;
-    return 0;
-  }
-
-  function updateStats() {
-    if (!state.items.length) {
-      els.stats.textContent = "No images loaded.";
-      return;
-    }
-
-    const w = els.canvas.width;
-    const h = els.canvas.height;
-    const mode = isCodexExportMode() ? " · Codex export" : "";
-    els.stats.textContent = `${state.items.length} image${state.items.length === 1 ? "" : "s"} · atlas ${w}×${h}px${mode}`;
-  }
-
-  function removeFakeChecker(img, width, height, tolerance, mode) {
-    const data = img.data;
-    const colors = detectCheckerColors(img, width, height);
-
-    if (!colors) {
-      return { detected: false, colors: [], removedPixels: 0, mode };
-    }
-
-    let removed = 0;
-
-    if (mode === "edge") {
-      removed = removeConnectedBackground(data, width, height, colors, tolerance);
-    } else {
-      for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] === 0) continue;
-        if (matchesAny(data, i, colors, tolerance)) {
-          data[i + 3] = 0;
-          removed++;
+          col,
+          item,
+          innerPadding,
+        ) {
+          const maxW = Math.max(1, CODEX_FRAME_W - innerPadding * 2);
+          const maxH = Math.max(1, CODEX_FRAME_H - innerPadding * 2);
+          const fit = Math.min(maxW / frame.width, maxH / frame.height);
+          const scale = fit * Math.max(0.01, item.scalePct / 100);
+          const w = Math.max(1, Math.round(frame.width * scale));
+          const h = Math.max(1, Math.round(frame.height * scale));
+          const x =
+            col * CODEX_FRAME_W +
+            Math.round((CODEX_FRAME_W - w) / 2 + item.offsetX);
+          const y =
+            row * CODEX_FRAME_H +
+            Math.round((CODEX_FRAME_H - h) / 2 + item.offsetY);
+          targetCtx.drawImage(frame, x, y, w, h);
         }
-      }
-    }
 
-    return {
-      detected: true,
-      colors: colors.map(c => rgbToHex(c)),
-      removedPixels: removed,
-      mode
-    };
-  }
-
-  function detectCheckerColors(img, width, height) {
-    const data = img.data;
-    const borderCounts = new Map();
-    const allCounts = new Map();
-
-    function sample(x, y, map) {
-      const i = (y * width + x) * 4;
-      if (data[i + 3] < 250) return;
-      const r = data[i], g = data[i + 1], b = data[i + 2];
-      const q = `${Math.round(r / 8) * 8},${Math.round(g / 8) * 8},${Math.round(b / 8) * 8}`;
-      map.set(q, (map.get(q) || 0) + 1);
-    }
-
-    const step = Math.max(1, Math.floor(Math.min(width, height) / 160));
-
-    for (let x = 0; x < width; x += step) {
-      sample(x, 0, borderCounts);
-      sample(x, height - 1, borderCounts);
-    }
-    for (let y = 0; y < height; y += step) {
-      sample(0, y, borderCounts);
-      sample(width - 1, y, borderCounts);
-    }
-
-    const allStep = Math.max(1, Math.floor(Math.sqrt((width * height) / 20000)));
-    for (let y = 0; y < height; y += allStep) {
-      for (let x = 0; x < width; x += allStep) {
-        sample(x, y, allCounts);
-      }
-    }
-
-    const borderTop = [...borderCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([key, count]) => ({ color: keyToRgb(key), count }));
-
-    const allTop = [...allCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 16)
-      .map(([key, count]) => ({ color: keyToRgb(key), count }));
-
-    const candidates = mergeCandidates(borderTop, allTop)
-      .filter(x => looksLikeCheckerColor(x.color));
-
-    if (candidates.length < 2) return fallbackCommonCheckerColors(data, width, height);
-
-    let best = null;
-    for (let i = 0; i < candidates.length; i++) {
-      for (let j = i + 1; j < candidates.length; j++) {
-        const a = candidates[i].color;
-        const b = candidates[j].color;
-        const d = colorDistance(a, b);
-        if (d < 12 || d > 125) continue;
-        const score = candidates[i].count + candidates[j].count - Math.abs(luma(a) - luma(b)) * 0.25;
-        if (!best || score > best.score) best = { colors: [a, b], score };
-      }
-    }
-
-    return best ? best.colors : fallbackCommonCheckerColors(data, width, height);
-  }
-
-  function mergeCandidates(borderTop, allTop) {
-    const merged = new Map();
-
-    for (const x of [...borderTop, ...allTop]) {
-      const key = rgbToHex(x.color);
-      if (!merged.has(key)) merged.set(key, { color: x.color, count: 0 });
-      merged.get(key).count += x.count;
-    }
-
-    return [...merged.values()].sort((a, b) => b.count - a.count);
-  }
-
-  function fallbackCommonCheckerColors(data, width, height) {
-    const common = [
-      [255,255,255], [254,254,254], [250,250,250], [245,245,245],
-      [238,238,238], [230,230,230], [224,224,224], [204,204,204],
-      [192,192,192], [153,153,153]
-    ];
-
-    const counts = common.map(c => ({ color: c, count: 0 }));
-    const step = Math.max(1, Math.floor(Math.sqrt((width * height) / 30000)));
-
-    for (let y = 0; y < height; y += step) {
-      for (let x = 0; x < width; x += step) {
-        const i = (y * width + x) * 4;
-        if (data[i + 3] < 250) continue;
-        for (const c of counts) {
-          if (colorDistance([data[i], data[i + 1], data[i + 2]], c.color) <= 10) c.count++;
+        function alignedOffset(total, size, align) {
+          if (align === "center") return Math.floor((total - size) / 2);
+          if (align === "end") return total - size;
+          return 0;
         }
-      }
-    }
 
-    const top = counts.filter(x => x.count > 0).sort((a, b) => b.count - a.count).slice(0, 2);
-    if (top.length >= 2) return top.map(x => x.color);
-    return null;
-  }
+        function updateStats() {
+          if (!state.items.length) {
+            els.stats.textContent = "No images loaded.";
+            return;
+          }
 
-  function looksLikeCheckerColor(c) {
-    const max = Math.max(...c);
-    const min = Math.min(...c);
-    const saturationish = max - min;
-    const brightness = luma(c);
-    return saturationish <= 45 && brightness >= 90;
-  }
-
-  function keyToRgb(key) {
-    return key.split(",").map(Number);
-  }
-
-  function rgbToHex(c) {
-    return "#" + c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
-  }
-
-  function luma(c) {
-    return c[0] * .2126 + c[1] * .7152 + c[2] * .0722;
-  }
-
-  function colorDistance(a, b) {
-    const dr = a[0] - b[0];
-    const dg = a[1] - b[1];
-    const db = a[2] - b[2];
-    return Math.sqrt(dr * dr + dg * dg + db * db);
-  }
-
-  function matchesAny(data, i, colors, tolerance) {
-    const px = [data[i], data[i + 1], data[i + 2]];
-    return colors.some(c => colorDistance(px, c) <= tolerance);
-  }
-
-  function removeConnectedBackground(data, width, height, colors, tolerance) {
-    const seen = new Uint8Array(width * height);
-    const queue = [];
-    let head = 0;
-    let removed = 0;
-
-    function pushIfMatch(x, y) {
-      if (x < 0 || y < 0 || x >= width || y >= height) return;
-      const p = y * width + x;
-      if (seen[p]) return;
-      seen[p] = 1;
-      const i = p * 4;
-      if (data[i + 3] !== 0 && matchesAny(data, i, colors, tolerance)) {
-        queue.push(p);
-      }
-    }
-
-    for (let x = 0; x < width; x++) {
-      pushIfMatch(x, 0);
-      pushIfMatch(x, height - 1);
-    }
-    for (let y = 0; y < height; y++) {
-      pushIfMatch(0, y);
-      pushIfMatch(width - 1, y);
-    }
-
-    while (head < queue.length) {
-      const p = queue[head++];
-      const i = p * 4;
-      if (data[i + 3] !== 0) {
-        data[i + 3] = 0;
-        removed++;
-      }
-
-      const x = p % width;
-      const y = Math.floor(p / width);
-
-      pushIfMatch(x + 1, y);
-      pushIfMatch(x - 1, y);
-      pushIfMatch(x, y + 1);
-      pushIfMatch(x, y - 1);
-    }
-
-    return removed;
-  }
-
-  function trimCanvas(canvas) {
-    const cctx = canvas.getContext("2d", { willReadFrequently: true });
-    const { width, height } = canvas;
-    const img = cctx.getImageData(0, 0, width, height);
-    const data = img.data;
-
-    let minX = width;
-    let minY = height;
-    let maxX = -1;
-    let maxY = -1;
-
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const a = data[(y * width + x) * 4 + 3];
-        if (a > 0) {
-          if (x < minX) minX = x;
-          if (y < minY) minY = y;
-          if (x > maxX) maxX = x;
-          if (y > maxY) maxY = y;
+          const w = els.canvas.width;
+          const h = els.canvas.height;
+          const mode = isCodexExportMode() ? " · Codex export" : "";
+          els.stats.textContent = `${state.items.length} image${state.items.length === 1 ? "" : "s"} · atlas ${w}×${h}px${mode}`;
         }
-      }
-    }
 
-    if (maxX < minX || maxY < minY) return canvas;
+        function removeFakeChecker(img, width, height, tolerance, mode) {
+          const data = img.data;
+          const colors = detectCheckerColors(img, width, height);
 
-    const out = document.createElement("canvas");
-    out.width = maxX - minX + 1;
-    out.height = maxY - minY + 1;
-    out.getContext("2d").drawImage(
-      canvas,
-      minX, minY, out.width, out.height,
-      0, 0, out.width, out.height
-    );
+          if (!colors) {
+            return { detected: false, colors: [], removedPixels: 0, mode };
+          }
 
-    return out;
-  }
+          let removed = 0;
 
-  async function exportSelected() {
-    if (els.exportFormat.value === "codex/zip") {
-      await downloadCodexPackage();
-      return;
-    }
-    downloadAtlas();
-  }
+          if (mode === "edge") {
+            removed = removeConnectedBackground(
+              data,
+              width,
+              height,
+              colors,
+              tolerance,
+            );
+          } else {
+            for (let i = 0; i < data.length; i += 4) {
+              if (data[i + 3] === 0) continue;
+              if (matchesAny(data, i, colors, tolerance)) {
+                data[i + 3] = 0;
+                removed++;
+              }
+            }
+          }
 
-  function downloadAtlas() {
-    const type = els.exportFormat.value;
-    const ext = type === "image/png" ? "png" : "webp";
-    const quality = type === "image/webp" ? Number(els.quality.value) : undefined;
+          return {
+            detected: true,
+            colors: colors.map((c) => rgbToHex(c)),
+            removedPixels: removed,
+            mode,
+          };
+        }
 
-    els.canvas.toBlob(blob => {
-      if (!blob) {
-        log("Export failed. Your browser may not support this format.", "warn");
-        return;
-      }
+        function detectCheckerColors(img, width, height) {
+          const data = img.data;
+          const borderCounts = new Map();
+          const allCounts = new Map();
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `sprite-atlas.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
-    }, type, quality);
-  }
+          function sample(x, y, map) {
+            const i = (y * width + x) * 4;
+            if (data[i + 3] < 250) return;
+            const r = data[i],
+              g = data[i + 1],
+              b = data[i + 2];
+            const q = `${Math.round(r / 8) * 8},${Math.round(g / 8) * 8},${Math.round(b / 8) * 8}`;
+            map.set(q, (map.get(q) || 0) + 1);
+          }
 
-  function triggerDownload(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-  }
+          const step = Math.max(1, Math.floor(Math.min(width, height) / 160));
 
-  async function downloadCodexPackage() {
-    setBusy(true, "export");
-    try {
-      const codexCanvas = document.createElement("canvas");
-      buildCodexAtlasIntoCanvas(codexCanvas);
+          for (let x = 0; x < width; x += step) {
+            sample(x, 0, borderCounts);
+            sample(x, height - 1, borderCounts);
+          }
+          for (let y = 0; y < height; y += step) {
+            sample(0, y, borderCounts);
+            sample(width - 1, y, borderCounts);
+          }
 
-      const spriteBlob = await canvasToBlob(codexCanvas, "image/webp", Number(els.quality.value));
-      if (!spriteBlob) {
-        log("Codex export failed. Your browser may not support WebP canvas export.", "warn");
-        return;
-      }
+          const allStep = Math.max(
+            1,
+            Math.floor(Math.sqrt((width * height) / 20000)),
+          );
+          for (let y = 0; y < height; y += allStep) {
+            for (let x = 0; x < width; x += allStep) {
+              sample(x, y, allCounts);
+            }
+          }
 
-      const petId = sanitizePetId(els.petId.value || "my-pet");
-      const manifest = {
-        id: petId,
-        displayName: (els.petName.value || "My Pet").trim(),
-        description: (els.petDescription.value || "A focused coding companion.").trim(),
-        spritesheetPath: "spritesheet.webp"
-      };
+          const borderTop = [...borderCounts.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([key, count]) => ({ color: keyToRgb(key), count }));
 
-      triggerDownload(
-        new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" }),
-        "pet.json"
-      );
+          const allTop = [...allCounts.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 16)
+            .map(([key, count]) => ({ color: keyToRgb(key), count }));
 
-      const zipBytes = makeZip([
-        { name: `${petId}/pet.json`, data: encodeText(JSON.stringify(manifest, null, 2)) },
-        { name: `${petId}/spritesheet.webp`, data: new Uint8Array(await spriteBlob.arrayBuffer()) }
-      ]);
+          const candidates = mergeCandidates(borderTop, allTop).filter((x) =>
+            looksLikeCheckerColor(x.color),
+          );
 
-      const blob = new Blob([zipBytes], { type: "application/zip" });
-      triggerDownload(blob, `${petId}.codex-pet.zip`);
+          if (candidates.length < 2)
+            return fallbackCommonCheckerColors(data, width, height);
 
-      log(`Exported "${petId}.codex-pet.zip" and "pet.json".`, "ok");
-    } finally {
-      setBusy(false, "export");
-    }
-  }
+          let best = null;
+          for (let i = 0; i < candidates.length; i++) {
+            for (let j = i + 1; j < candidates.length; j++) {
+              const a = candidates[i].color;
+              const b = candidates[j].color;
+              const d = colorDistance(a, b);
+              if (d < 12 || d > 125) continue;
+              const score =
+                candidates[i].count +
+                candidates[j].count -
+                Math.abs(luma(a) - luma(b)) * 0.25;
+              if (!best || score > best.score) best = { colors: [a, b], score };
+            }
+          }
 
-  function sanitizePetId(value) {
-    return String(value)
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 80) || "my-pet";
-  }
+          return best
+            ? best.colors
+            : fallbackCommonCheckerColors(data, width, height);
+        }
 
-  function canvasToBlob(canvas, type, quality) {
-    return new Promise(resolve => canvas.toBlob(resolve, type, quality));
-  }
+        function mergeCandidates(borderTop, allTop) {
+          const merged = new Map();
 
-  function downloadMetadata() {
-    const isCodex = els.exportFormat.value === "codex/zip";
-    const metadata = isCodex ? buildCodexMetadata() : state.metadata;
-    const atlas = isCodex
-      ? {
-        width: CODEX_WIDTH,
-        height: CODEX_HEIGHT,
-        layout: "codex-pet"
-      }
-      : {
-        width: els.canvas.width,
-        height: els.canvas.height,
-        layout: els.layoutMode.value
-      };
-    const blob = new Blob([JSON.stringify({
-      atlas: {
-        ...atlas,
-        exportFormat: els.exportFormat.value,
-        generatedAt: new Date().toISOString()
-      },
-      sprites: metadata
-    }, null, 2)], { type: "application/json" });
+          for (const x of [...borderTop, ...allTop]) {
+            const key = rgbToHex(x.color);
+            if (!merged.has(key)) merged.set(key, { color: x.color, count: 0 });
+            merged.get(key).count += x.count;
+          }
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "sprite-atlas-metadata.json";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-  }
+          return [...merged.values()].sort((a, b) => b.count - a.count);
+        }
 
-  function encodeText(text) {
-    return new TextEncoder().encode(text);
-  }
+        function fallbackCommonCheckerColors(data, width, height) {
+          const common = [
+            [255, 255, 255],
+            [254, 254, 254],
+            [250, 250, 250],
+            [245, 245, 245],
+            [238, 238, 238],
+            [230, 230, 230],
+            [224, 224, 224],
+            [204, 204, 204],
+            [192, 192, 192],
+            [153, 153, 153],
+          ];
 
-  let crcTable = null;
+          const counts = common.map((c) => ({ color: c, count: 0 }));
+          const step = Math.max(
+            1,
+            Math.floor(Math.sqrt((width * height) / 30000)),
+          );
 
-  function getCrcTable() {
-    if (crcTable) return crcTable;
-    crcTable = new Uint32Array(256);
-    for (let n = 0; n < 256; n++) {
-      let c = n;
-      for (let k = 0; k < 8; k++) {
-        c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
-      }
-      crcTable[n] = c >>> 0;
-    }
-    return crcTable;
-  }
+          for (let y = 0; y < height; y += step) {
+            for (let x = 0; x < width; x += step) {
+              const i = (y * width + x) * 4;
+              if (data[i + 3] < 250) continue;
+              for (const c of counts) {
+                if (
+                  colorDistance([data[i], data[i + 1], data[i + 2]], c.color) <=
+                  10
+                )
+                  c.count++;
+              }
+            }
+          }
 
-  function crc32(bytes) {
-    const table = getCrcTable();
-    let crc = 0 ^ -1;
-    for (let i = 0; i < bytes.length; i++) {
-      crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 0xFF];
-    }
-    return (crc ^ -1) >>> 0;
-  }
+          const top = counts
+            .filter((x) => x.count > 0)
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 2);
+          if (top.length >= 2) return top.map((x) => x.color);
+          return null;
+        }
 
-  function makeZip(files) {
-    const chunks = [];
-    const central = [];
-    let offset = 0;
+        function looksLikeCheckerColor(c) {
+          const max = Math.max(...c);
+          const min = Math.min(...c);
+          const saturationish = max - min;
+          const brightness = luma(c);
+          return saturationish <= 45 && brightness >= 90;
+        }
 
-    for (const file of files) {
-      const nameBytes = encodeText(file.name);
-      const data = file.data;
-      const crc = crc32(data);
+        function keyToRgb(key) {
+          return key.split(",").map(Number);
+        }
 
-      const local = new Uint8Array(30 + nameBytes.length);
-      const view = new DataView(local.buffer);
-      view.setUint32(0, 0x04034b50, true);
-      view.setUint16(4, 20, true);
-      view.setUint16(6, 0, true);
-      view.setUint16(8, 0, true);
-      view.setUint16(10, 0, true);
-      view.setUint16(12, 0, true);
-      view.setUint32(14, crc, true);
-      view.setUint32(18, data.length, true);
-      view.setUint32(22, data.length, true);
-      view.setUint16(26, nameBytes.length, true);
-      view.setUint16(28, 0, true);
-      local.set(nameBytes, 30);
+        function rgbToHex(c) {
+          return (
+            "#" +
+            c
+              .map((v) =>
+                Math.max(0, Math.min(255, Math.round(v)))
+                  .toString(16)
+                  .padStart(2, "0"),
+              )
+              .join("")
+          );
+        }
 
-      chunks.push(local, data);
+        function luma(c) {
+          return c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
+        }
 
-      const cdir = new Uint8Array(46 + nameBytes.length);
-      const cview = new DataView(cdir.buffer);
-      cview.setUint32(0, 0x02014b50, true);
-      cview.setUint16(4, 20, true);
-      cview.setUint16(6, 20, true);
-      cview.setUint16(8, 0, true);
-      cview.setUint16(10, 0, true);
-      cview.setUint16(12, 0, true);
-      cview.setUint16(14, 0, true);
-      cview.setUint32(16, crc, true);
-      cview.setUint32(20, data.length, true);
-      cview.setUint32(24, data.length, true);
-      cview.setUint16(28, nameBytes.length, true);
-      cview.setUint16(30, 0, true);
-      cview.setUint16(32, 0, true);
-      cview.setUint16(34, 0, true);
-      cview.setUint16(36, 0, true);
-      cview.setUint32(38, 0, true);
-      cview.setUint32(42, offset, true);
-      cdir.set(nameBytes, 46);
-      central.push(cdir);
+        function colorDistance(a, b) {
+          const dr = a[0] - b[0];
+          const dg = a[1] - b[1];
+          const db = a[2] - b[2];
+          return Math.sqrt(dr * dr + dg * dg + db * db);
+        }
 
-      offset += local.length + data.length;
-    }
+        function matchesAny(data, i, colors, tolerance) {
+          const px = [data[i], data[i + 1], data[i + 2]];
+          return colors.some((c) => colorDistance(px, c) <= tolerance);
+        }
 
-    const centralOffset = offset;
-    const centralSize = central.reduce((sum, x) => sum + x.length, 0);
-    const end = new Uint8Array(22);
-    const eview = new DataView(end.buffer);
-    eview.setUint32(0, 0x06054b50, true);
-    eview.setUint16(4, 0, true);
-    eview.setUint16(6, 0, true);
-    eview.setUint16(8, files.length, true);
-    eview.setUint16(10, files.length, true);
-    eview.setUint32(12, centralSize, true);
-    eview.setUint32(16, centralOffset, true);
-    eview.setUint16(20, 0, true);
+        function removeConnectedBackground(
+          data,
+          width,
+          height,
+          colors,
+          tolerance,
+        ) {
+          const seen = new Uint8Array(width * height);
+          const queue = [];
+          let head = 0;
+          let removed = 0;
 
-    const all = [...chunks, ...central, end];
-    const total = all.reduce((sum, x) => sum + x.length, 0);
-    const out = new Uint8Array(total);
-    let pos = 0;
-    for (const chunk of all) {
-      out.set(chunk, pos);
-      pos += chunk.length;
-    }
-    return out;
-  }
+          function pushIfMatch(x, y) {
+            if (x < 0 || y < 0 || x >= width || y >= height) return;
+            const p = y * width + x;
+            if (seen[p]) return;
+            seen[p] = 1;
+            const i = p * 4;
+            if (data[i + 3] !== 0 && matchesAny(data, i, colors, tolerance)) {
+              queue.push(p);
+            }
+          }
 
-  setupEvents();
-  renderCodexOrderLegend();
-  showReorderView();
-  updateExportModeUI();
-  applyPreviewZoom();
-  renderList();
-})();
-</script>
-</body>
+          for (let x = 0; x < width; x++) {
+            pushIfMatch(x, 0);
+            pushIfMatch(x, height - 1);
+          }
+          for (let y = 0; y < height; y++) {
+            pushIfMatch(0, y);
+            pushIfMatch(width - 1, y);
+          }
+
+          while (head < queue.length) {
+            const p = queue[head++];
+            const i = p * 4;
+            if (data[i + 3] !== 0) {
+              data[i + 3] = 0;
+              removed++;
+            }
+
+            const x = p % width;
+            const y = Math.floor(p / width);
+
+            pushIfMatch(x + 1, y);
+            pushIfMatch(x - 1, y);
+            pushIfMatch(x, y + 1);
+            pushIfMatch(x, y - 1);
+          }
+
+          return removed;
+        }
+
+        function trimCanvas(canvas) {
+          const cctx = canvas.getContext("2d", { willReadFrequently: true });
+          const { width, height } = canvas;
+          const img = cctx.getImageData(0, 0, width, height);
+          const data = img.data;
+
+          let minX = width;
+          let minY = height;
+          let maxX = -1;
+          let maxY = -1;
+
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const a = data[(y * width + x) * 4 + 3];
+              if (a > 0) {
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+              }
+            }
+          }
+
+          if (maxX < minX || maxY < minY) return canvas;
+
+          const out = document.createElement("canvas");
+          out.width = maxX - minX + 1;
+          out.height = maxY - minY + 1;
+          out
+            .getContext("2d")
+            .drawImage(
+              canvas,
+              minX,
+              minY,
+              out.width,
+              out.height,
+              0,
+              0,
+              out.width,
+              out.height,
+            );
+
+          return out;
+        }
+
+        async function exportSelected() {
+          if (els.exportFormat.value === "codex/zip") {
+            await downloadCodexPackage();
+            return;
+          }
+          downloadAtlas();
+        }
+
+        function downloadAtlas() {
+          const type = els.exportFormat.value;
+          const ext = type === "image/png" ? "png" : "webp";
+          const quality =
+            type === "image/webp" ? Number(els.quality.value) : undefined;
+
+          els.canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                log(
+                  "Export failed. Your browser may not support this format.",
+                  "warn",
+                );
+                return;
+              }
+
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `sprite-atlas.${ext}`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 1500);
+            },
+            type,
+            quality,
+          );
+        }
+
+        function triggerDownload(blob, filename) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1500);
+        }
+
+        async function downloadCodexPackage() {
+          setBusy(true, "export");
+          try {
+            const codexCanvas = document.createElement("canvas");
+            buildCodexAtlasIntoCanvas(codexCanvas);
+
+            const spriteBlob = await canvasToBlob(
+              codexCanvas,
+              "image/webp",
+              Number(els.quality.value),
+            );
+            if (!spriteBlob) {
+              log(
+                "Codex export failed. Your browser may not support WebP canvas export.",
+                "warn",
+              );
+              return;
+            }
+
+            const petId = sanitizePetId(els.petId.value || "my-pet");
+            const manifest = {
+              id: petId,
+              displayName: (els.petName.value || "My Pet").trim(),
+              description: (
+                els.petDescription.value || "A focused coding companion."
+              ).trim(),
+              spritesheetPath: "spritesheet.webp",
+            };
+
+            triggerDownload(
+              new Blob([JSON.stringify(manifest, null, 2)], {
+                type: "application/json",
+              }),
+              "pet.json",
+            );
+
+            const zipBytes = makeZip([
+              {
+                name: `${petId}/pet.json`,
+                data: encodeText(JSON.stringify(manifest, null, 2)),
+              },
+              {
+                name: `${petId}/spritesheet.webp`,
+                data: new Uint8Array(await spriteBlob.arrayBuffer()),
+              },
+            ]);
+
+            const blob = new Blob([zipBytes], { type: "application/zip" });
+            triggerDownload(blob, `${petId}.codex-pet.zip`);
+
+            log(`Exported "${petId}.codex-pet.zip" and "pet.json".`, "ok");
+          } finally {
+            setBusy(false, "export");
+          }
+        }
+
+        function sanitizePetId(value) {
+          return (
+            String(value)
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z0-9_-]+/g, "-")
+              .replace(/^-+|-+$/g, "")
+              .slice(0, 80) || "my-pet"
+          );
+        }
+
+        function canvasToBlob(canvas, type, quality) {
+          return new Promise((resolve) =>
+            canvas.toBlob(resolve, type, quality),
+          );
+        }
+
+        function downloadMetadata() {
+          const isCodex = els.exportFormat.value === "codex/zip";
+          const metadata = isCodex ? buildCodexMetadata() : state.metadata;
+          const atlas = isCodex
+            ? {
+                width: CODEX_WIDTH,
+                height: CODEX_HEIGHT,
+                layout: "codex-pet",
+              }
+            : {
+                width: els.canvas.width,
+                height: els.canvas.height,
+                layout: els.layoutMode.value,
+              };
+          const blob = new Blob(
+            [
+              JSON.stringify(
+                {
+                  atlas: {
+                    ...atlas,
+                    exportFormat: els.exportFormat.value,
+                    generatedAt: new Date().toISOString(),
+                  },
+                  sprites: metadata,
+                },
+                null,
+                2,
+              ),
+            ],
+            { type: "application/json" },
+          );
+
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "sprite-atlas-metadata.json";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1500);
+        }
+
+        function encodeText(text) {
+          return new TextEncoder().encode(text);
+        }
+
+        let crcTable = null;
+
+        function getCrcTable() {
+          if (crcTable) return crcTable;
+          crcTable = new Uint32Array(256);
+          for (let n = 0; n < 256; n++) {
+            let c = n;
+            for (let k = 0; k < 8; k++) {
+              c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+            }
+            crcTable[n] = c >>> 0;
+          }
+          return crcTable;
+        }
+
+        function crc32(bytes) {
+          const table = getCrcTable();
+          let crc = 0 ^ -1;
+          for (let i = 0; i < bytes.length; i++) {
+            crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 0xff];
+          }
+          return (crc ^ -1) >>> 0;
+        }
+
+        function makeZip(files) {
+          const chunks = [];
+          const central = [];
+          let offset = 0;
+
+          for (const file of files) {
+            const nameBytes = encodeText(file.name);
+            const data = file.data;
+            const crc = crc32(data);
+
+            const local = new Uint8Array(30 + nameBytes.length);
+            const view = new DataView(local.buffer);
+            view.setUint32(0, 0x04034b50, true);
+            view.setUint16(4, 20, true);
+            view.setUint16(6, 0, true);
+            view.setUint16(8, 0, true);
+            view.setUint16(10, 0, true);
+            view.setUint16(12, 0, true);
+            view.setUint32(14, crc, true);
+            view.setUint32(18, data.length, true);
+            view.setUint32(22, data.length, true);
+            view.setUint16(26, nameBytes.length, true);
+            view.setUint16(28, 0, true);
+            local.set(nameBytes, 30);
+
+            chunks.push(local, data);
+
+            const cdir = new Uint8Array(46 + nameBytes.length);
+            const cview = new DataView(cdir.buffer);
+            cview.setUint32(0, 0x02014b50, true);
+            cview.setUint16(4, 20, true);
+            cview.setUint16(6, 20, true);
+            cview.setUint16(8, 0, true);
+            cview.setUint16(10, 0, true);
+            cview.setUint16(12, 0, true);
+            cview.setUint16(14, 0, true);
+            cview.setUint32(16, crc, true);
+            cview.setUint32(20, data.length, true);
+            cview.setUint32(24, data.length, true);
+            cview.setUint16(28, nameBytes.length, true);
+            cview.setUint16(30, 0, true);
+            cview.setUint16(32, 0, true);
+            cview.setUint16(34, 0, true);
+            cview.setUint16(36, 0, true);
+            cview.setUint32(38, 0, true);
+            cview.setUint32(42, offset, true);
+            cdir.set(nameBytes, 46);
+            central.push(cdir);
+
+            offset += local.length + data.length;
+          }
+
+          const centralOffset = offset;
+          const centralSize = central.reduce((sum, x) => sum + x.length, 0);
+          const end = new Uint8Array(22);
+          const eview = new DataView(end.buffer);
+          eview.setUint32(0, 0x06054b50, true);
+          eview.setUint16(4, 0, true);
+          eview.setUint16(6, 0, true);
+          eview.setUint16(8, files.length, true);
+          eview.setUint16(10, files.length, true);
+          eview.setUint32(12, centralSize, true);
+          eview.setUint32(16, centralOffset, true);
+          eview.setUint16(20, 0, true);
+
+          const all = [...chunks, ...central, end];
+          const total = all.reduce((sum, x) => sum + x.length, 0);
+          const out = new Uint8Array(total);
+          let pos = 0;
+          for (const chunk of all) {
+            out.set(chunk, pos);
+            pos += chunk.length;
+          }
+          return out;
+        }
+
+        setupEvents();
+        renderCodexOrderLegend();
+        showReorderView();
+        updateExportModeUI();
+        applyPreviewZoom();
+        renderList();
+      })();
+    </script>
+  </body>
 </html>
