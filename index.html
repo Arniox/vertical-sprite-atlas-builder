@@ -2756,14 +2756,6 @@ Codex pet workflow:
           gctx.restore();
         }
 
-        function calculateCodexInnerPadding(sourceCanvas, boxes) {
-          const measured = boxes
-            .map((box) => measureContentPaddingRatio(sourceCanvas, box))
-            .filter((value) => Number.isFinite(value));
-
-          return paddingFromMeasuredRatios(measured);
-        }
-
         function calculateCodexInnerPaddingFromFrames(frames) {
           const measured = frames
             .map((frame) =>
