@@ -850,6 +850,7 @@ Codex pet workflow:
         try {
           rebuildNow();
         } finally {
+          state.rebuildTimer = null;
           setBusy(false, "rebuild");
         }
       });
@@ -1082,6 +1083,7 @@ Codex pet workflow:
 
   function clearAll() {
     clearTimeout(state.rebuildTimer);
+    state.rebuildTimer = null;
     state.busyReasons.clear();
     syncBusy();
     state.items = [];
