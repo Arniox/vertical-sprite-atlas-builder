@@ -1552,6 +1552,7 @@ Codex pet workflow:
 
         function openItemDialog(itemId) {
           state.editItemId = itemId;
+          state.selectedCellIndex = null;
           const item = getEditingItem();
           if (!item) return;
           populateItemDialog(item);
@@ -1564,6 +1565,7 @@ Codex pet workflow:
 
         function hideItemPanel() {
           state.editItemId = null;
+          state.selectedCellIndex = null;
           showReorderView();
         }
 
@@ -1585,6 +1587,52 @@ Codex pet workflow:
             redetectItemCells(item);
           }
           return item.frameBoxes;
+        }
+
+        function syncItemSourceFramesToBoxes(item) {
+          item.sourceFrames = Math.max(1, Math.min(8, item.frameBoxes.length));
+          els.editSourceFrames.value = item.sourceFrames;
+        }
+
+        function addEditableCell(item) {
+          const boxes = getItemFrameBoxes(item);
+          if (boxes.length >= 8) return;
+
+          const selected = Number.isInteger(state.selectedCellIndex)
+            ? state.selectedCellIndex
+            : -1;
+          const splitIndex =
+            selected >= 0 && selected < boxes.length
+              ? selected
+              : boxes.reduce(
+                  (best, box, index) => (box.w > boxes[best].w ? index : best),
+                  0,
+                );
+          const box = boxes[splitIndex];
+          if (box.w < 4) return;
+
+          const leftW = Math.max(2, Math.floor(box.w / 2));
+          const rightW = Math.max(2, box.w - leftW);
+          box.w = leftW;
+          boxes.splice(splitIndex + 1, 0, {
+            x: box.x + leftW,
+            y: box.y,
+            w: rightW,
+            h: box.h,
+          });
+          state.selectedCellIndex = splitIndex + 1;
+          syncItemSourceFramesToBoxes(item);
+        }
+
+        function deleteSelectedCell(item) {
+          const boxes = getItemFrameBoxes(item);
+          const index = state.selectedCellIndex;
+          if (!Number.isInteger(index) || index < 0 || index >= boxes.length) return;
+          if (boxes.length <= 1) return;
+
+          boxes.splice(index, 1);
+          state.selectedCellIndex = Math.min(index, boxes.length - 1);
+          syncItemSourceFramesToBoxes(item);
         }
 
         function detectSourceCellBoxes(canvas, expectedCount) {
@@ -1694,13 +1742,25 @@ Codex pet workflow:
           const index = state.items.findIndex((x) => x.id === item.id);
           const codexState = CODEX_STATES[index];
           const boxes = getItemFrameBoxes(item);
+          if (
+            Number.isInteger(state.selectedCellIndex) &&
+            state.selectedCellIndex >= boxes.length
+          ) {
+            state.selectedCellIndex = boxes.length - 1;
+          }
           els.editName.textContent = item.name;
           els.editScale.value = item.scalePct;
           els.editScaleLabel.textContent = `${item.scalePct}%`;
           els.editOffsetX.value = item.offsetX;
           els.editOffsetY.value = item.offsetY;
           els.editSourceFrames.value = item.sourceFrames;
-          els.editCellSummary.textContent = `${boxes.length} numbered cell${boxes.length === 1 ? "" : "s"} detected`;
+          els.editCellSummary.textContent =
+            `${boxes.length} numbered cell${boxes.length === 1 ? "" : "s"} detected` +
+            (Number.isInteger(state.selectedCellIndex)
+              ? ` · selected ${state.selectedCellIndex + 1}`
+              : "");
+          els.deleteCellBtn.disabled = !Number.isInteger(state.selectedCellIndex) || boxes.length <= 1;
+          els.addCellBtn.disabled = boxes.length >= 8;
           els.editCodexState.textContent = codexState
             ? `Position ${index + 1}: ${codexState.label} (${codexState.frames} used frames)`
             : "Not used; Codex export only uses the first 9 loaded strips.";
@@ -1718,6 +1778,7 @@ Codex pet workflow:
           item.sourceFrames = clampInt(els.editSourceFrames.value, 1, 8, 8);
           if (item.sourceFrames !== previousSourceFrames) {
             redetectItemCells(item);
+            state.selectedCellIndex = null;
           }
 
           els.editScaleLabel.textContent = `${item.scalePct}%`;
