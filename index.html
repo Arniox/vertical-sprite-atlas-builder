@@ -542,10 +542,12 @@
       }
 
       .mini-checker {
+        position: relative;
         border: 1px solid var(--line);
         border-radius: 12px;
         padding: 10px;
         overflow: auto;
+        min-height: 300px;
         background:
           linear-gradient(45deg, #2b3040 25%, transparent 25%),
           linear-gradient(-45deg, #2b3040 25%, transparent 25%),
@@ -558,6 +560,31 @@
           0 8px,
           8px -8px,
           -8px 0px;
+      }
+
+      .cell-edit-toast {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        justify-content: flex-end;
+        gap: 5px;
+        margin-bottom: 6px;
+        pointer-events: none;
+      }
+
+      .cell-edit-toast button {
+        min-width: 26px;
+        min-height: 24px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        line-height: 1;
+        pointer-events: auto;
+      }
+
+      #editPreview {
+        cursor: default;
       }
 
       .codex-order {
@@ -944,7 +971,11 @@ A focused coding companion.</textarea
                   Original preview
                 </div>
                 <div class="mini-checker">
-                  <canvas id="editPreview" width="320" height="190"></canvas>
+                  <div class="cell-edit-toast">
+                    <button id="addCellBtn" type="button" title="Add cell">+</button>
+                    <button id="deleteCellBtn" type="button" title="Delete selected cell">Delete</button>
+                  </div>
+                  <canvas id="editPreview" width="480" height="280"></canvas>
                 </div>
               </div>
             </div>
@@ -1014,6 +1045,7 @@ Codex pet workflow:
           busyReasons: new Set(),
           previewZoom: 1,
           cellDrag: null,
+          selectedCellIndex: null,
         };
 
         const els = {
@@ -1069,6 +1101,8 @@ Codex pet workflow:
           editCodexState: $("editCodexState"),
           editPreview: $("editPreview"),
           detectCellsBtn: $("detectCellsBtn"),
+          addCellBtn: $("addCellBtn"),
+          deleteCellBtn: $("deleteCellBtn"),
           resetItemBtn: $("resetItemBtn"),
           closeItemBtn: $("closeItemBtn"),
         };
