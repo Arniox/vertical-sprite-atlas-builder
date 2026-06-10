@@ -304,22 +304,43 @@
     flex-wrap: wrap;
   }
 
-  .preview-controls {
+  .preview-zoom-toast {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 3;
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: wrap;
+    padding: 8px 10px;
+    border: 1px solid rgba(90, 103, 130, .9);
+    border-radius: 999px;
+    background: rgba(16, 20, 28, .78);
+    box-shadow: 0 12px 30px rgba(0,0,0,.28);
+    opacity: 0;
+    transform: translateY(-6px);
+    pointer-events: none;
+    transition: opacity .14s ease, transform .14s ease;
+  }
+
+  .canvas-shell:hover .preview-zoom-toast,
+  .canvas-shell:focus-within .preview-zoom-toast {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .zoom-toast-btn {
+    min-width: 34px;
+    padding: 7px 10px;
+    border-radius: 999px;
   }
 
   .zoom-readout {
-    min-width: 54px;
+    min-width: 48px;
     text-align: center;
     font-size: 12px;
     color: var(--muted);
-  }
-
-  .zoom-slider {
-    width: 150px;
   }
 
   .stats {
@@ -437,13 +458,12 @@
 
   dialog::backdrop { background: rgba(0,0,0,.55); }
 
-  .item-panel {
-    display: none;
-    padding: 0;
+  .sidebar-view[hidden] {
+    display: none !important;
   }
 
-  .item-panel.open {
-    display: block;
+  .sidebar-back {
+    margin-top: 0;
   }
 
   .codex-only[hidden] {
@@ -648,13 +668,6 @@
   <section class="card preview-wrap">
     <div class="toolbar">
       <div class="stats" id="stats">No images loaded.</div>
-      <div class="preview-controls">
-        <button id="zoomOutBtn" type="button" title="Zoom out">-</button>
-        <span class="zoom-readout" id="zoomLabel">100%</span>
-        <input id="zoomRange" class="zoom-slider" type="range" min="0.25" max="6" value="1" step="0.05">
-        <button id="zoomInBtn" type="button" title="Zoom in">+</button>
-        <button id="zoomResetBtn" type="button" title="Reset zoom">Reset zoom</button>
-      </div>
       <div class="button-row" style="margin:0">
         <button id="downloadBtn" class="primary" disabled>Export</button>
         <button id="downloadJsonBtn" disabled>Export metadata JSON</button>
@@ -662,6 +675,12 @@
     </div>
 
     <div class="canvas-shell" id="canvasShell">
+      <div class="preview-zoom-toast" aria-label="Preview zoom controls">
+        <button id="zoomOutBtn" class="zoom-toast-btn" type="button" title="Zoom out">-</button>
+        <span class="zoom-readout" id="zoomLabel">100%</span>
+        <button id="zoomInBtn" class="zoom-toast-btn" type="button" title="Zoom in">+</button>
+        <button id="zoomResetBtn" class="zoom-toast-btn" type="button" title="Reset zoom">Reset</button>
+      </div>
       <div class="busy-overlay"><div class="spinner" aria-label="Loading"></div></div>
       <div class="canvas-holder" id="canvasHolder">
         <div class="checker">
@@ -680,8 +699,8 @@
 
   <div class="workspace-sidebar">
     <section class="card">
-      <h2>Reorder</h2>
-      <div class="content">
+      <h2 id="sidebarTitle">Reorder</h2>
+      <div class="content sidebar-view" id="reorderView">
         <div class="codex-only" id="codexOrderPanel">
           <div class="hint">Codex order is fixed. Match the loaded strips to these rows before exporting a pet package.</div>
           <div class="codex-order" id="codexOrderLegend"></div>
@@ -689,11 +708,10 @@
         <div class="section-title" style="margin:12px 0 6px">Loaded strips</div>
         <div class="list" id="list"></div>
       </div>
-    </section>
-
-    <section class="card item-panel" id="itemDialog">
-      <h2>Adjust sprite strip</h2>
-      <div class="content">
+      <div class="content sidebar-view" id="editView" hidden>
+        <div class="button-row sidebar-back">
+          <button id="backToListBtn" type="button">Back</button>
+        </div>
         <div class="dialog-grid">
           <div class="settings">
             <div>
@@ -832,10 +850,13 @@ Codex pet workflow:
     tolLabel: $("tolLabel"),
     cleanupMode: $("cleanupMode"),
     exportFormat: $("exportFormat"),
+    sidebarTitle: $("sidebarTitle"),
+    reorderView: $("reorderView"),
+    editView: $("editView"),
+    backToListBtn: $("backToListBtn"),
     zoomOutBtn: $("zoomOutBtn"),
     zoomInBtn: $("zoomInBtn"),
     zoomResetBtn: $("zoomResetBtn"),
-    zoomRange: $("zoomRange"),
     zoomLabel: $("zoomLabel"),
     quality: $("quality"),
     qualityLabel: $("qualityLabel"),
@@ -844,7 +865,6 @@ Codex pet workflow:
     petDescription: $("petDescription"),
     codexCellPadding: $("codexCellPadding"),
     helpDialog: $("helpDialog"),
-    itemDialog: $("itemDialog"),
     editName: $("editName"),
     editScale: $("editScale"),
     editScaleLabel: $("editScaleLabel"),
@@ -881,7 +901,6 @@ Codex pet workflow:
   function applyPreviewZoom() {
     const zoom = Math.max(0.25, Math.min(6, Number(state.previewZoom) || 1));
     state.previewZoom = zoom;
-    els.zoomRange.value = String(zoom);
     els.zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
     els.canvas.style.width = `${Math.max(1, Math.round(els.canvas.width * zoom))}px`;
     els.canvas.style.height = `${Math.max(1, Math.round(els.canvas.height * zoom))}px`;
@@ -890,6 +909,18 @@ Codex pet workflow:
   function setPreviewZoom(value) {
     state.previewZoom = Math.max(0.25, Math.min(6, Number(value) || 1));
     applyPreviewZoom();
+  }
+
+  function showReorderView() {
+    els.sidebarTitle.textContent = "Reorder";
+    els.reorderView.hidden = false;
+    els.editView.hidden = true;
+  }
+
+  function showEditView() {
+    els.sidebarTitle.textContent = "Adjust sprite strip";
+    els.reorderView.hidden = true;
+    els.editView.hidden = false;
   }
 
   function updateExportModeUI() {
@@ -974,7 +1005,6 @@ Codex pet workflow:
       updateExportModeUI();
     });
 
-    els.zoomRange.addEventListener("input", () => setPreviewZoom(els.zoomRange.value));
     els.zoomOutBtn.addEventListener("click", () => setPreviewZoom(state.previewZoom - 0.25));
     els.zoomInBtn.addEventListener("click", () => setPreviewZoom(state.previewZoom + 0.25));
     els.zoomResetBtn.addEventListener("click", () => setPreviewZoom(1));
@@ -1012,6 +1042,11 @@ Codex pet workflow:
     });
 
     els.closeItemBtn.addEventListener("click", e => {
+      e.preventDefault();
+      hideItemPanel();
+    });
+
+    els.backToListBtn.addEventListener("click", e => {
       e.preventDefault();
       hideItemPanel();
     });
@@ -1181,7 +1216,7 @@ Codex pet workflow:
     const item = getEditingItem();
     if (!item) return;
     populateItemDialog(item);
-    els.itemDialog.classList.add("open");
+    showEditView();
   }
 
   function getEditingItem() {
@@ -1189,7 +1224,8 @@ Codex pet workflow:
   }
 
   function hideItemPanel() {
-    els.itemDialog.classList.remove("open");
+    state.editItemId = null;
+    showReorderView();
   }
 
   function refreshItemPanel() {
@@ -2029,6 +2065,7 @@ Codex pet workflow:
 
   setupEvents();
   renderCodexOrderLegend();
+  showReorderView();
   updateExportModeUI();
   applyPreviewZoom();
   renderList();
