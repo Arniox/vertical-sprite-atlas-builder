@@ -1092,7 +1092,7 @@ Codex pet workflow:
 
         function applyPreviewZoom() {
           const zoom = Math.max(
-            0.001,
+            0.05,
             Math.min(6, Number(state.previewZoom) || 1),
           );
           state.previewZoom = zoom;
@@ -1102,7 +1102,7 @@ Codex pet workflow:
         }
 
         function setPreviewZoom(value) {
-          state.previewZoom = Math.max(0.001, Math.min(6, Number(value) || 1));
+          state.previewZoom = Math.max(0.05, Math.min(6, Number(value) || 1));
           applyPreviewZoom();
         }
 
@@ -1176,7 +1176,7 @@ Codex pet workflow:
             "wheel",
             (e) => {
               if (e.ctrlKey || e.metaKey) {
-                setPreviewZoom(state.previewZoom - e.deltaY * 0.0025);
+                setPreviewZoom(state.previewZoom - e.deltaY * 0.00025);
                 e.preventDefault();
                 return;
               }
@@ -1223,10 +1223,10 @@ Codex pet workflow:
           });
 
           els.zoomOutBtn.addEventListener("click", () =>
-            setPreviewZoom(state.previewZoom - 0.25),
+            setPreviewZoom(state.previewZoom - 0.1),
           );
           els.zoomInBtn.addEventListener("click", () =>
-            setPreviewZoom(state.previewZoom + 0.25),
+            setPreviewZoom(state.previewZoom + 0.1),
           );
           els.zoomResetBtn.addEventListener("click", () => setPreviewZoom(1));
 
