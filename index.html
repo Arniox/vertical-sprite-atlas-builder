@@ -1489,8 +1489,11 @@ Codex pet workflow:
             );
 
             const codexState = CODEX_STATES[index];
+            const usedFrames = codexState
+              ? Math.min(codexState.frames, getItemFrameBoxes(item).length)
+              : 0;
             const codexText = codexState
-              ? `<strong>${index + 1}. ${codexState.label}</strong> · ${codexState.frames} used frames`
+              ? `<strong>${index + 1}. ${codexState.label}</strong> · ${usedFrames}/${codexState.frames} used frames`
               : `<span class="warn">Ignored by Codex export</span>`;
 
             const meta = document.createElement("div");
@@ -1797,7 +1800,7 @@ Codex pet workflow:
           els.deleteCellBtn.disabled = !Number.isInteger(state.selectedCellIndex) || boxes.length <= 1;
           els.addCellBtn.disabled = boxes.length >= 8;
           els.editCodexState.textContent = codexState
-            ? `Position ${index + 1}: ${codexState.label} (${codexState.frames} used frames)`
+            ? `Position ${index + 1}: ${codexState.label} (${Math.min(codexState.frames, boxes.length)}/${codexState.frames} used frames)`
             : "Not used; Codex export only uses the first 9 loaded strips.";
           drawItemDialogPreview(item);
         }
@@ -2229,11 +2232,11 @@ Codex pet workflow:
 
             const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
             const boxes = getItemFrameBoxes(item);
-            const sourceFrames = boxes.length;
+            const outputFrames = Math.min(codexState.frames, boxes.length);
             const innerPadding = calculateCodexInnerPadding(cleanedStrip, boxes);
 
-            for (let col = 0; col < codexState.frames; col++) {
-              const box = boxes[Math.min(col, sourceFrames - 1)];
+            for (let col = 0; col < outputFrames; col++) {
+              const box = boxes[col];
               const frame = document.createElement("canvas");
               frame.width = Math.max(1, Math.round(box.w));
               frame.height = Math.max(1, Math.round(box.h));
@@ -2286,13 +2289,14 @@ Codex pet workflow:
             const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
             const boxes = getItemFrameBoxes(item);
             const padding = calculateCodexInnerPadding(cleanedStrip, boxes);
+            const outputFrames = Math.min(codexState.frames, boxes.length);
             state.metadata.push({
               row,
               state: codexState.name,
               label: codexState.label,
               source: item.name,
               normalizedPadding: padding,
-              guideCells: Array.from({ length: codexState.frames }, (_, col) => ({
+              guideCells: Array.from({ length: outputFrames }, (_, col) => ({
                 index: col + 1,
                 x: col * CODEX_FRAME_W,
                 y: row * CODEX_FRAME_H,
@@ -2402,7 +2406,8 @@ Codex pet workflow:
                 row,
                 state: codexState.name,
                 label: codexState.label,
-                usedFrames: codexState.frames,
+                usedFrames: 0,
+                maxFrames: codexState.frames,
                 source: null,
                 transparent: true,
               });
@@ -2413,8 +2418,9 @@ Codex pet workflow:
               row,
               state: codexState.name,
               label: codexState.label,
-              usedFrames: codexState.frames,
-              sourceFrames: clampInt(item.sourceFrames, 1, 8, 8),
+              usedFrames: Math.min(codexState.frames, getItemFrameBoxes(item).length),
+              maxFrames: codexState.frames,
+              sourceFrames: getItemFrameBoxes(item).length,
               sourceCells: getItemFrameBoxes(item).map((box, index) => ({
                 index: index + 1,
                 x: box.x,
