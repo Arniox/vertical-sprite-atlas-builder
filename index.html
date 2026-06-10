@@ -600,6 +600,48 @@
         cursor: default;
       }
 
+      .mask-dialog {
+        width: min(1100px, calc(100vw - 32px));
+        max-width: 1100px;
+      }
+
+      .mask-toolbar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+
+      .mask-toolbar .active {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px rgba(124, 183, 255, .45) inset;
+      }
+
+      .mask-canvas-wrap {
+        max-height: 68vh;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px;
+        background:
+          linear-gradient(45deg, #2b3040 25%, transparent 25%),
+          linear-gradient(-45deg, #2b3040 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #2b3040 75%),
+          linear-gradient(-45deg, transparent 75%, #2b3040 75%);
+        background-color: #202431;
+        background-size: 16px 16px;
+        background-position:
+          0 0,
+          0 8px,
+          8px -8px,
+          -8px 0px;
+      }
+
+      #maskCanvas {
+        cursor: crosshair;
+      }
+
       .codex-order {
         display: grid;
         gap: 5px;
@@ -971,6 +1013,9 @@ A focused coding companion.</textarea
                     <button id="detectCellsBtn" type="button">
                       Redetect cells
                     </button>
+                    <button id="editCellMaskBtn" type="button">
+                      Edit selected cell mask
+                    </button>
                   </div>
                 </div>
 
@@ -1024,7 +1069,7 @@ Normal atlas workflow:
 Codex pet workflow:
 1. Load up to 9 strips in this row order:
    idle, running-right, running-left, waving, jumping, failed, waiting, running, review.
-2. Open each strip and set "Codex source frames" if it is not 8.
+2. Open each strip and check the detected Codex source cells.
 3. Choose "Codex pet package (.zip)".
 4. Export.
 5. Put the unzipped folder under ~/.codex/pets/ or %USERPROFILE%\.codex\pets\.</pre
@@ -1032,6 +1077,23 @@ Codex pet workflow:
       <button onclick="document.getElementById('helpDialog').close()">
         Close
       </button>
+    </dialog>
+
+    <dialog id="maskDialog" class="mask-dialog">
+      <h2 style="margin-top: 0">Edit cell mask</h2>
+      <div class="mask-toolbar">
+        <button id="maskIncludeBtn" type="button">+ Include</button>
+        <button id="maskExcludeBtn" type="button">- Exclude</button>
+        <label>
+          Brush
+          <input id="maskBrushSize" type="range" min="2" max="40" value="10" />
+        </label>
+        <button id="maskClearBtn" type="button">Clear cell mask</button>
+        <button id="maskCloseBtn" class="primary" type="button">Done</button>
+      </div>
+      <div class="mask-canvas-wrap">
+        <canvas id="maskCanvas" width="900" height="420"></canvas>
+      </div>
     </dialog>
 
     <script>
@@ -1068,6 +1130,11 @@ Codex pet workflow:
           cellDrag: null,
           cellDragDirty: false,
           selectedCellIndex: null,
+          maskEdit: {
+            mode: "include",
+            drawing: false,
+            zoom: 1,
+          },
         };
 
         const els = {
@@ -1125,10 +1192,18 @@ Codex pet workflow:
           editCodexState: $("editCodexState"),
           editPreview: $("editPreview"),
           detectCellsBtn: $("detectCellsBtn"),
+          editCellMaskBtn: $("editCellMaskBtn"),
           addCellBtn: $("addCellBtn"),
           deleteCellBtn: $("deleteCellBtn"),
           resetItemBtn: $("resetItemBtn"),
           closeItemBtn: $("closeItemBtn"),
+          maskDialog: $("maskDialog"),
+          maskCanvas: $("maskCanvas"),
+          maskIncludeBtn: $("maskIncludeBtn"),
+          maskExcludeBtn: $("maskExcludeBtn"),
+          maskBrushSize: $("maskBrushSize"),
+          maskClearBtn: $("maskClearBtn"),
+          maskCloseBtn: $("maskCloseBtn"),
         };
 
         const ctx = els.canvas.getContext("2d", { willReadFrequently: true });
@@ -1369,10 +1444,28 @@ Codex pet workflow:
             scheduleRebuild(120);
           });
 
+          els.editCellMaskBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            openMaskDialog();
+          });
+
           els.editPreview.addEventListener("pointerdown", beginCellBoundaryDrag);
           els.editPreview.addEventListener("pointermove", moveCellBoundaryDrag);
           els.editPreview.addEventListener("pointerup", endCellBoundaryDrag);
           els.editPreview.addEventListener("pointerleave", endCellBoundaryDrag);
+
+          els.maskIncludeBtn.addEventListener("click", () => setMaskMode("include"));
+          els.maskExcludeBtn.addEventListener("click", () => setMaskMode("exclude"));
+          els.maskClearBtn.addEventListener("click", clearSelectedCellMask);
+          els.maskCloseBtn.addEventListener("click", () => {
+            els.maskDialog.close();
+            scheduleRebuild(120);
+          });
+          els.maskCanvas.addEventListener("pointerdown", beginMaskStroke);
+          els.maskCanvas.addEventListener("pointermove", continueMaskStroke);
+          els.maskCanvas.addEventListener("pointerup", endMaskStroke);
+          els.maskCanvas.addEventListener("pointerleave", endMaskStroke);
+
 
           els.resetItemBtn.addEventListener("click", (e) => {
             e.preventDefault();
@@ -1381,7 +1474,8 @@ Codex pet workflow:
             item.scalePct = 100;
             item.offsetX = 0;
             item.offsetY = 0;
-            item.sourceFrames = 8;
+            item.sourceFrames = 1;
+            item.cellMasks = [];
             redetectItemCells(item);
             populateItemDialog(item);
             renderList();
@@ -1434,7 +1528,7 @@ Codex pet workflow:
                   scalePct: 100,
                   offsetX: 0,
                   offsetY: 0,
-                  sourceFrames: 8,
+                  sourceFrames: 1,
                 });
                 redetectItemCells(state.items[state.items.length - 1]);
               } catch (err) {
@@ -1490,10 +1584,10 @@ Codex pet workflow:
 
             const codexState = CODEX_STATES[index];
             const usedFrames = codexState
-              ? Math.min(codexState.frames, getItemFrameBoxes(item).length)
+              ? Math.min(CODEX_COLS, getItemFrameBoxes(item).length)
               : 0;
             const codexText = codexState
-              ? `<strong>${index + 1}. ${codexState.label}</strong> · ${usedFrames}/${codexState.frames} used frames`
+              ? `<strong>${index + 1}. ${codexState.label}</strong> · ${usedFrames} source cells`
               : `<span class="warn">Ignored by Codex export</span>`;
 
             const meta = document.createElement("div");
@@ -1613,14 +1707,18 @@ Codex pet workflow:
           populateItemDialog(item);
         }
 
-        function redetectItemCells(item) {
+        function redetectItemCells(item, requestedCount = null) {
           const cleaned = makeCleanCanvasFromBitmap(item.bitmap);
-          const count = clampInt(item.sourceFrames, 1, 8, 8);
+          const count =
+            requestedCount == null
+              ? null
+              : clampInt(requestedCount, 1, CODEX_COLS, 1);
           item.frameBoxes = detectSourceCellBoxes(cleaned, count);
+          syncItemSourceFramesToBoxes(item);
         }
 
         function getItemFrameBoxes(item) {
-          const count = clampInt(item.sourceFrames, 1, 8, 8);
+          const count = clampInt(item.sourceFrames, 1, CODEX_COLS, 1);
           if (!Array.isArray(item.frameBoxes) || item.frameBoxes.length !== count) {
             redetectItemCells(item);
           }
@@ -1628,13 +1726,13 @@ Codex pet workflow:
         }
 
         function syncItemSourceFramesToBoxes(item) {
-          item.sourceFrames = Math.max(1, Math.min(8, item.frameBoxes.length));
-          els.editSourceFrames.value = item.sourceFrames;
+          item.sourceFrames = Math.max(1, Math.min(CODEX_COLS, item.frameBoxes.length));
+          if (els.editSourceFrames) els.editSourceFrames.value = item.sourceFrames;
         }
 
         function addEditableCell(item) {
           const boxes = getItemFrameBoxes(item);
-          if (boxes.length >= 8) return;
+          if (boxes.length >= CODEX_COLS) return;
 
           const selected = Number.isInteger(state.selectedCellIndex)
             ? state.selectedCellIndex
@@ -1658,6 +1756,11 @@ Codex pet workflow:
             w: rightW,
             h: box.h,
           });
+          if (Array.isArray(item.cellMasks)) {
+            item.cellMasks.forEach((mask) => {
+              if (mask.cellIndex > splitIndex) mask.cellIndex++;
+            });
+          }
           state.selectedCellIndex = splitIndex + 1;
           syncItemSourceFramesToBoxes(item);
         }
@@ -1669,11 +1772,19 @@ Codex pet workflow:
           if (boxes.length <= 1) return;
 
           boxes.splice(index, 1);
+          if (Array.isArray(item.cellMasks)) {
+            item.cellMasks = item.cellMasks
+              .filter((mask) => mask.cellIndex !== index)
+              .map((mask) => ({
+                ...mask,
+                cellIndex: mask.cellIndex > index ? mask.cellIndex - 1 : mask.cellIndex,
+              }));
+          }
           state.selectedCellIndex = Math.min(index, boxes.length - 1);
           syncItemSourceFramesToBoxes(item);
         }
 
-        function detectSourceCellBoxes(canvas, expectedCount) {
+        function detectSourceCellBoxes(canvas, expectedCount = null) {
           const cctx = canvas.getContext("2d", { willReadFrequently: true });
           const img = cctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = img.data;
@@ -1687,18 +1798,31 @@ Codex pet workflow:
             }
           }
 
-          const minPixels = Math.max(1, Math.ceil(canvas.height * 0.015));
-          const active = columnCounts.map((count) => count >= minPixels);
-          closeSmallColumnGaps(active, Math.max(2, Math.round(canvas.width * 0.004)));
-          const groups = findActiveColumnGroups(active)
-            .filter((group) => group.end - group.start + 1 >= 2)
+          const minGroupPixels = Math.max(2, Math.ceil(canvas.height * 0.01));
+          const active = columnCounts.map((count) => count > 0);
+          const maxGap = Math.max(3, Math.round(canvas.width * 0.018));
+          const minWidth = Math.max(2, Math.round(canvas.width * 0.004));
+          const groups = findBufferedColumnGroups(active, maxGap)
+            .filter((group) => {
+              const width = group.end - group.start + 1;
+              let pixels = 0;
+              for (let x = group.start; x <= group.end; x++) pixels += columnCounts[x];
+              return width >= minWidth || pixels >= minGroupPixels;
+            })
             .sort((a, b) => a.start - b.start);
+          const forcedCount = Number.isInteger(expectedCount);
 
-          if (groups.length < expectedCount) {
+          if (!groups.length) {
+            return makeEqualSourceBoxes(canvas.width, canvas.height, forcedCount ? expectedCount : 1);
+          }
+
+          if (forcedCount && groups.length < expectedCount) {
             return makeEqualSourceBoxes(canvas.width, canvas.height, expectedCount);
           }
 
-          const selected = reduceGroupsToExpectedCount(groups, expectedCount);
+          const selected = forcedCount
+            ? reduceGroupsToExpectedCount(groups, expectedCount)
+            : reduceGroupsToExpectedCount(groups, CODEX_COLS);
           const boundaries = [0];
           for (let i = 1; i < selected.length; i++) {
             boundaries.push(Math.round((selected[i - 1].end + selected[i].start) / 2));
@@ -1712,9 +1836,9 @@ Codex pet workflow:
           });
         }
 
-        function reduceGroupsToExpectedCount(groups, expectedCount) {
+        function reduceGroupsToExpectedCount(groups, maxCount) {
           const reduced = groups.map((group) => ({ ...group }));
-          while (reduced.length > expectedCount) {
+          while (reduced.length > maxCount) {
             let mergeIndex = 0;
             let smallestGap = Infinity;
             for (let i = 1; i < reduced.length; i++) {
@@ -1733,35 +1857,29 @@ Codex pet workflow:
           return reduced;
         }
 
-        function closeSmallColumnGaps(active, maxGap) {
-          let x = 0;
-          while (x < active.length) {
-            if (active[x]) {
-              x++;
-              continue;
-            }
-            const start = x;
-            while (x < active.length && !active[x]) x++;
-            const end = x - 1;
-            if (
-              start > 0 &&
-              x < active.length &&
-              end - start + 1 <= maxGap
-            ) {
-              for (let i = start; i <= end; i++) active[i] = true;
-            }
-          }
-        }
-
-        function findActiveColumnGroups(active) {
+        function findBufferedColumnGroups(active, maxGap) {
           const groups = [];
           let x = 0;
           while (x < active.length) {
             while (x < active.length && !active[x]) x++;
             if (x >= active.length) break;
+
             const start = x;
-            while (x < active.length && active[x]) x++;
-            groups.push({ start, end: x - 1 });
+            let end = x;
+            let gap = 0;
+            x++;
+
+            while (x < active.length) {
+              if (active[x]) {
+                end = x;
+                gap = 0;
+              } else {
+                gap++;
+                if (gap > maxGap) break;
+              }
+              x++;
+            }
+            groups.push({ start, end });
           }
           return groups;
         }
@@ -1798,9 +1916,10 @@ Codex pet workflow:
               ? ` · selected ${state.selectedCellIndex + 1}`
               : "");
           els.deleteCellBtn.disabled = !Number.isInteger(state.selectedCellIndex) || boxes.length <= 1;
-          els.addCellBtn.disabled = boxes.length >= 8;
+          els.addCellBtn.disabled = boxes.length >= CODEX_COLS;
+          els.editCellMaskBtn.disabled = !Number.isInteger(state.selectedCellIndex);
           els.editCodexState.textContent = codexState
-            ? `Position ${index + 1}: ${codexState.label} (${Math.min(codexState.frames, boxes.length)}/${codexState.frames} used frames)`
+            ? `Position ${index + 1}: ${codexState.label} (${Math.min(CODEX_COLS, boxes.length)} source cells)`
             : "Not used; Codex export only uses the first 9 loaded strips.";
           drawItemDialogPreview(item);
         }
@@ -1813,9 +1932,9 @@ Codex pet workflow:
           item.offsetX = clampInt(els.editOffsetX.value, -9999, 9999, 0);
           item.offsetY = clampInt(els.editOffsetY.value, -9999, 9999, 0);
           const previousSourceFrames = item.sourceFrames;
-          item.sourceFrames = clampInt(els.editSourceFrames.value, 1, 8, 8);
+          item.sourceFrames = clampInt(els.editSourceFrames.value, 1, CODEX_COLS, 1);
           if (item.sourceFrames !== previousSourceFrames) {
-            redetectItemCells(item);
+            redetectItemCells(item, item.sourceFrames);
             state.selectedCellIndex = null;
           }
 
@@ -1873,6 +1992,32 @@ Codex pet workflow:
             cctx.fillStyle = "#eef2fb";
             cctx.fillText(String(index + 1), x + 8, y + 5);
           });
+
+          for (const mask of item.cellMasks || []) {
+            const selected = mask.cellIndex === state.selectedCellIndex;
+            cctx.beginPath();
+            cctx.arc(
+              offsetX + mask.x * scale,
+              offsetY + mask.y * scale,
+              Math.max(2, mask.r * scale),
+              0,
+              Math.PI * 2,
+            );
+            cctx.fillStyle =
+              mask.mode === "include"
+                ? selected
+                  ? "rgba(142, 230, 165, .32)"
+                  : "rgba(142, 230, 165, .16)"
+                : selected
+                  ? "rgba(255, 124, 124, .34)"
+                  : "rgba(255, 124, 124, .16)";
+            cctx.strokeStyle =
+              mask.mode === "include"
+                ? "rgba(142, 230, 165, .9)"
+                : "rgba(255, 124, 124, .9)";
+            cctx.fill();
+            cctx.stroke();
+          }
 
           cctx.restore();
         }
@@ -2002,6 +2147,262 @@ Codex pet workflow:
           left.w = x - left.x;
           right.x = x;
           right.w = currentRight - x;
+        }
+
+        function openMaskDialog() {
+          const item = getEditingItem();
+          if (!item || !Number.isInteger(state.selectedCellIndex)) return;
+          setMaskMode(state.maskEdit.mode);
+          renderMaskDialog();
+          els.maskDialog.showModal();
+        }
+
+        function setMaskMode(mode) {
+          state.maskEdit.mode = mode;
+          els.maskIncludeBtn.classList.toggle("active", mode === "include");
+          els.maskExcludeBtn.classList.toggle("active", mode === "exclude");
+        }
+
+        function renderMaskDialog() {
+          const item = getEditingItem();
+          if (!item || !Number.isInteger(state.selectedCellIndex)) return;
+
+          const zoom = 3;
+          const pad = 44;
+          state.maskEdit.zoom = zoom;
+          state.maskEdit.offsetX = pad;
+          state.maskEdit.offsetY = pad;
+          els.maskCanvas.width = Math.max(900, Math.round(item.width * zoom + pad * 2));
+          els.maskCanvas.height = Math.max(420, Math.round(item.height * zoom + pad * 2));
+
+          const mctx = els.maskCanvas.getContext("2d");
+          mctx.clearRect(0, 0, els.maskCanvas.width, els.maskCanvas.height);
+          mctx.imageSmoothingEnabled = false;
+          mctx.drawImage(
+            item.bitmap,
+            pad,
+            pad,
+            Math.round(item.width * zoom),
+            Math.round(item.height * zoom),
+          );
+
+          const boxes = getItemFrameBoxes(item);
+          boxes.forEach((box, index) => {
+            const x = pad + box.x * zoom;
+            const y = pad + box.y * zoom;
+            const w = box.w * zoom;
+            const h = box.h * zoom;
+            mctx.strokeStyle =
+              index === state.selectedCellIndex
+                ? "rgba(255, 216, 155, .98)"
+                : "rgba(124, 183, 255, .8)";
+            mctx.lineWidth = index === state.selectedCellIndex ? 2 : 1;
+            mctx.strokeRect(x, y, w, h);
+          });
+
+          for (const mask of item.cellMasks || []) {
+            if (mask.cellIndex !== state.selectedCellIndex) continue;
+            mctx.beginPath();
+            mctx.arc(
+              pad + mask.x * zoom,
+              pad + mask.y * zoom,
+              mask.r * zoom,
+              0,
+              Math.PI * 2,
+            );
+            mctx.fillStyle =
+              mask.mode === "include"
+                ? "rgba(142, 230, 165, .35)"
+                : "rgba(255, 124, 124, .38)";
+            mctx.fill();
+            mctx.strokeStyle =
+              mask.mode === "include"
+                ? "rgba(142, 230, 165, .95)"
+                : "rgba(255, 124, 124, .95)";
+            mctx.lineWidth = 1;
+            mctx.stroke();
+          }
+        }
+
+        function getMaskSourcePoint(e) {
+          const rect = els.maskCanvas.getBoundingClientRect();
+          return {
+            x: (e.clientX - rect.left - state.maskEdit.offsetX) / state.maskEdit.zoom,
+            y: (e.clientY - rect.top - state.maskEdit.offsetY) / state.maskEdit.zoom,
+          };
+        }
+
+        function addMaskStrokeAt(e) {
+          const item = getEditingItem();
+          if (!item || !Number.isInteger(state.selectedCellIndex)) return;
+          const point = getMaskSourcePoint(e);
+          if (
+            point.x < 0 ||
+            point.y < 0 ||
+            point.x > item.width ||
+            point.y > item.height
+          ) {
+            return;
+          }
+
+          if (!Array.isArray(item.cellMasks)) item.cellMasks = [];
+          item.cellMasks.push({
+            cellIndex: state.selectedCellIndex,
+            mode: state.maskEdit.mode,
+            x: point.x,
+            y: point.y,
+            r: Number(els.maskBrushSize.value) || 10,
+          });
+          renderMaskDialog();
+        }
+
+        function beginMaskStroke(e) {
+          state.maskEdit.drawing = true;
+          els.maskCanvas.setPointerCapture(e.pointerId);
+          addMaskStrokeAt(e);
+          e.preventDefault();
+        }
+
+        function continueMaskStroke(e) {
+          if (!state.maskEdit.drawing) return;
+          addMaskStrokeAt(e);
+          e.preventDefault();
+        }
+
+        function endMaskStroke(e) {
+          if (state.maskEdit.drawing && e.pointerId != null) {
+            try {
+              els.maskCanvas.releasePointerCapture(e.pointerId);
+            } catch {
+              // Pointer capture may already be released if the pointer left the canvas.
+            }
+          }
+          state.maskEdit.drawing = false;
+          drawItemDialogPreview(getEditingItem());
+          scheduleRebuild(220);
+        }
+
+        function clearSelectedCellMask() {
+          const item = getEditingItem();
+          if (!item || !Number.isInteger(state.selectedCellIndex)) return;
+          item.cellMasks = (item.cellMasks || []).filter(
+            (mask) => mask.cellIndex !== state.selectedCellIndex,
+          );
+          renderMaskDialog();
+          scheduleRebuild(120);
+        }
+
+        function getCellMasks(item, cellIndex, mode = null) {
+          return (item.cellMasks || []).filter(
+            (mask) =>
+              mask.cellIndex === cellIndex && (!mode || mask.mode === mode),
+          );
+        }
+
+        function getEffectiveCellBox(item, box, cellIndex) {
+          let left = box.x;
+          let top = box.y;
+          let right = box.x + box.w;
+          let bottom = box.y + box.h;
+
+          for (const mask of getCellMasks(item, cellIndex, "include")) {
+            left = Math.min(left, mask.x - mask.r);
+            top = Math.min(top, mask.y - mask.r);
+            right = Math.max(right, mask.x + mask.r);
+            bottom = Math.max(bottom, mask.y + mask.r);
+          }
+
+          left = Math.max(0, Math.floor(left));
+          top = Math.max(0, Math.floor(top));
+          right = Math.min(item.width, Math.ceil(right));
+          bottom = Math.min(item.height, Math.ceil(bottom));
+
+          return {
+            x: left,
+            y: top,
+            w: Math.max(1, right - left),
+            h: Math.max(1, bottom - top),
+          };
+        }
+
+        function getEffectiveCellBoxes(item, boxes = getItemFrameBoxes(item)) {
+          return boxes.map((box, index) => getEffectiveCellBox(item, box, index));
+        }
+
+        function applyExcludeMasksToFrame(frameCtx, item, cellIndex, sourceBox) {
+          const masks = getCellMasks(item, cellIndex, "exclude");
+          if (!masks.length) return;
+
+          frameCtx.save();
+          frameCtx.globalCompositeOperation = "destination-out";
+          frameCtx.fillStyle = "#000";
+          for (const mask of masks) {
+            frameCtx.beginPath();
+            frameCtx.arc(
+              mask.x - sourceBox.x,
+              mask.y - sourceBox.y,
+              mask.r,
+              0,
+              Math.PI * 2,
+            );
+            frameCtx.fill();
+          }
+          frameCtx.restore();
+        }
+
+        function applyIncludeMasksToFrame(frameCtx, item, cellIndex, sourceBox, baseBox) {
+          const masks = getCellMasks(item, cellIndex, "include");
+          const maskCanvas = document.createElement("canvas");
+          maskCanvas.width = frameCtx.canvas.width;
+          maskCanvas.height = frameCtx.canvas.height;
+          const maskCtx = maskCanvas.getContext("2d");
+
+          maskCtx.fillStyle = "#000";
+          maskCtx.fillRect(
+            baseBox.x - sourceBox.x,
+            baseBox.y - sourceBox.y,
+            baseBox.w,
+            baseBox.h,
+          );
+
+          for (const mask of masks) {
+            maskCtx.beginPath();
+            maskCtx.arc(
+              mask.x - sourceBox.x,
+              mask.y - sourceBox.y,
+              mask.r,
+              0,
+              Math.PI * 2,
+            );
+            maskCtx.fill();
+          }
+
+          frameCtx.save();
+          frameCtx.globalCompositeOperation = "destination-in";
+          frameCtx.drawImage(maskCanvas, 0, 0);
+          frameCtx.restore();
+        }
+
+        function createCodexSourceFrameCanvas(cleanedStrip, item, baseBox, sourceBox, cellIndex) {
+          const frame = document.createElement("canvas");
+          frame.width = Math.max(1, Math.round(sourceBox.w));
+          frame.height = Math.max(1, Math.round(sourceBox.h));
+          const frameCtx = frame.getContext("2d", { willReadFrequently: true });
+          frameCtx.imageSmoothingEnabled = false;
+          frameCtx.drawImage(
+            cleanedStrip,
+            sourceBox.x,
+            sourceBox.y,
+            sourceBox.w,
+            sourceBox.h,
+            0,
+            0,
+            frame.width,
+            frame.height,
+          );
+          applyIncludeMasksToFrame(frameCtx, item, cellIndex, sourceBox, baseBox);
+          applyExcludeMasksToFrame(frameCtx, item, cellIndex, sourceBox);
+          return frame;
         }
 
         function clampInt(value, min, max, fallback) {
@@ -2232,28 +2633,21 @@ Codex pet workflow:
 
             const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
             const boxes = getItemFrameBoxes(item);
-            const outputFrames = Math.min(codexState.frames, boxes.length);
-            const innerPadding = calculateCodexInnerPadding(cleanedStrip, boxes);
+            const outputFrames = Math.min(CODEX_COLS, boxes.length);
+            const effectiveBoxes = getEffectiveCellBoxes(item, boxes);
+            const sourceFrames = Array.from({ length: outputFrames }, (_, col) =>
+              createCodexSourceFrameCanvas(
+                cleanedStrip,
+                item,
+                boxes[col],
+                effectiveBoxes[col],
+                col,
+              ),
+            );
+            const innerPadding = calculateCodexInnerPaddingFromFrames(sourceFrames);
 
             for (let col = 0; col < outputFrames; col++) {
-              const box = boxes[col];
-              const frame = document.createElement("canvas");
-              frame.width = Math.max(1, Math.round(box.w));
-              frame.height = Math.max(1, Math.round(box.h));
-              const fctx = frame.getContext("2d", { willReadFrequently: true });
-              fctx.imageSmoothingEnabled = false;
-              fctx.drawImage(
-                cleanedStrip,
-                box.x,
-                box.y,
-                box.w,
-                box.h,
-                0,
-                0,
-                frame.width,
-                frame.height,
-              );
-
+              const frame = sourceFrames[col];
               const frameToDraw = els.trimTransparent.checked
                 ? trimCanvas(frame)
                 : frame;
@@ -2288,8 +2682,18 @@ Codex pet workflow:
 
             const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
             const boxes = getItemFrameBoxes(item);
-            const padding = calculateCodexInnerPadding(cleanedStrip, boxes);
-            const outputFrames = Math.min(codexState.frames, boxes.length);
+            const effectiveBoxes = getEffectiveCellBoxes(item, boxes);
+            const outputFrames = Math.min(CODEX_COLS, boxes.length);
+            const sourceFrames = Array.from({ length: outputFrames }, (_, col) =>
+              createCodexSourceFrameCanvas(
+                cleanedStrip,
+                item,
+                boxes[col],
+                effectiveBoxes[col],
+                col,
+              ),
+            );
+            const padding = calculateCodexInnerPaddingFromFrames(sourceFrames);
             state.metadata.push({
               row,
               state: codexState.name,
@@ -2357,6 +2761,25 @@ Codex pet workflow:
             .map((box) => measureContentPaddingRatio(sourceCanvas, box))
             .filter((value) => Number.isFinite(value));
 
+          return paddingFromMeasuredRatios(measured);
+        }
+
+        function calculateCodexInnerPaddingFromFrames(frames) {
+          const measured = frames
+            .map((frame) =>
+              measureContentPaddingRatio(frame, {
+                x: 0,
+                y: 0,
+                w: frame.width,
+                h: frame.height,
+              }),
+            )
+            .filter((value) => Number.isFinite(value));
+
+          return paddingFromMeasuredRatios(measured);
+        }
+
+        function paddingFromMeasuredRatios(measured) {
           if (!measured.length) {
             return Math.max(0, Math.min(80, Number(els.codexCellPadding.value) || 0));
           }
@@ -2407,7 +2830,8 @@ Codex pet workflow:
                 state: codexState.name,
                 label: codexState.label,
                 usedFrames: 0,
-                maxFrames: codexState.frames,
+                maxFrames: CODEX_COLS,
+                expectedFrames: codexState.frames,
                 source: null,
                 transparent: true,
               });
@@ -2418,16 +2842,25 @@ Codex pet workflow:
               row,
               state: codexState.name,
               label: codexState.label,
-              usedFrames: Math.min(codexState.frames, getItemFrameBoxes(item).length),
-              maxFrames: codexState.frames,
+              usedFrames: Math.min(CODEX_COLS, getItemFrameBoxes(item).length),
+              maxFrames: CODEX_COLS,
+              expectedFrames: codexState.frames,
               sourceFrames: getItemFrameBoxes(item).length,
-              sourceCells: getItemFrameBoxes(item).map((box, index) => ({
-                index: index + 1,
-                x: box.x,
-                y: box.y,
-                width: box.w,
-                height: box.h,
-              })),
+              sourceCells: getItemFrameBoxes(item).map((box, index) => {
+                const effectiveBox = getEffectiveCellBox(item, box, index);
+                return {
+                  index: index + 1,
+                  x: box.x,
+                  y: box.y,
+                  width: box.w,
+                  height: box.h,
+                  effectiveX: effectiveBox.x,
+                  effectiveY: effectiveBox.y,
+                  effectiveWidth: effectiveBox.w,
+                  effectiveHeight: effectiveBox.h,
+                  masks: getCellMasks(item, index),
+                };
+              }),
               source: item.name,
               x: 0,
               y: row * CODEX_FRAME_H,
