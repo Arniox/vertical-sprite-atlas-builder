@@ -426,12 +426,8 @@
 
   .dialog-grid {
     display: grid;
-    grid-template-columns: 1fr 260px;
+    grid-template-columns: 1fr;
     gap: 16px;
-  }
-
-  @media (max-width: 700px) {
-    .dialog-grid { grid-template-columns: 1fr; }
   }
 
   .mini-checker {
@@ -768,7 +764,8 @@ Codex pet workflow:
     items: [],
     metadata: [],
     editItemId: null,
-    rebuildTimer: null
+    rebuildTimer: null,
+    busyReasons: new Set()
   };
 
   const els = {
@@ -835,19 +832,25 @@ Codex pet workflow:
     els.log.innerHTML = `<span class="${cls}">${escapeHtml(message)}</span>`;
   }
 
-  function setBusy(on) {
-    els.canvasShell.classList.toggle("busy", !!on);
+  function syncBusy() {
+    els.canvasShell.classList.toggle("busy", state.busyReasons.size > 0);
+  }
+
+  function setBusy(on, reason = "generic") {
+    if (on) state.busyReasons.add(reason);
+    else state.busyReasons.delete(reason);
+    syncBusy();
   }
 
   function scheduleRebuild(delay = 120) {
     clearTimeout(state.rebuildTimer);
-    setBusy(true);
+    setBusy(true, "rebuild");
     state.rebuildTimer = setTimeout(() => {
       requestAnimationFrame(() => {
         try {
           rebuildNow();
         } finally {
-          setBusy(false);
+          setBusy(false, "rebuild");
         }
       });
     }, delay);
@@ -951,7 +954,7 @@ Codex pet workflow:
     const files = [...fileList].filter(f => f.type.startsWith("image/"));
     if (!files.length) return;
 
-    setBusy(true);
+    setBusy(true, "load");
     log(`Loading ${files.length} image${files.length === 1 ? "" : "s"}...`);
 
     try {
@@ -978,7 +981,7 @@ Codex pet workflow:
       renderList();
       rebuildNow();
     } finally {
-      setBusy(false);
+      setBusy(false, "load");
     }
   }
 
@@ -1079,10 +1082,11 @@ Codex pet workflow:
 
   function clearAll() {
     clearTimeout(state.rebuildTimer);
+    state.busyReasons.clear();
+    syncBusy();
     state.items = [];
     state.metadata = [];
     state.editItemId = null;
-    setBusy(false);
     ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
     els.canvas.width = 1;
     els.canvas.height = 1;
@@ -1745,7 +1749,7 @@ Codex pet workflow:
   }
 
   async function downloadCodexPackage() {
-    setBusy(true);
+    setBusy(true, "export");
     try {
       const codexCanvas = document.createElement("canvas");
       buildCodexAtlasIntoCanvas(codexCanvas);
@@ -1781,7 +1785,7 @@ Codex pet workflow:
 
       log(`Exported Codex package "${petId}.codex-pet.zip".`, "ok");
     } finally {
-      setBusy(false);
+      setBusy(false, "export");
     }
   }
 
@@ -1801,11 +1805,20 @@ Codex pet workflow:
   function downloadMetadata() {
     const isCodex = els.exportFormat.value === "codex/zip";
     const metadata = isCodex ? buildCodexMetadata() : state.metadata;
-    const blob = new Blob([JSON.stringify({
-      atlas: {
+    const atlas = isCodex
+      ? {
+        width: CODEX_WIDTH,
+        height: CODEX_HEIGHT,
+        layout: "codex-pet"
+      }
+      : {
         width: els.canvas.width,
         height: els.canvas.height,
-        layout: isCodex ? "codex-pet" : els.layoutMode.value,
+        layout: els.layoutMode.value
+      };
+    const blob = new Blob([JSON.stringify({
+      atlas: {
+        ...atlas,
         exportFormat: els.exportFormat.value,
         generatedAt: new Date().toISOString()
       },
