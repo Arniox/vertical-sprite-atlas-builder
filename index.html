@@ -634,7 +634,7 @@
 
     <div class="canvas-shell" id="canvasShell">
       <div class="busy-overlay"><div class="spinner" aria-label="Loading"></div></div>
-      <div class="canvas-holder">
+      <div class="canvas-holder" id="canvasHolder">
         <div class="checker">
           <canvas id="atlasCanvas" width="1" height="1"></canvas>
         </div>
@@ -775,7 +775,9 @@ Codex pet workflow:
     dropZone: $("dropZone"),
     fileInput: $("fileInput"),
     list: $("list"),
+    codexOrderLegend: $("codexOrderLegend"),
     canvas: $("atlasCanvas"),
+    canvasHolder: $("canvasHolder"),
     canvasShell: $("canvasShell"),
     stats: $("stats"),
     log: $("log"),
@@ -871,6 +873,23 @@ Codex pet workflow:
 
     els.dropZone.addEventListener("drop", e => addFiles(e.dataTransfer.files));
 
+    els.canvasHolder.addEventListener("wheel", e => {
+      if (!els.canvasHolder.scrollHeight || !els.canvasHolder.scrollWidth) return;
+      if (e.shiftKey) {
+        els.canvasHolder.scrollLeft += e.deltaY;
+        e.preventDefault();
+        return;
+      }
+
+      if (e.deltaY !== 0) {
+        els.canvasHolder.scrollTop += e.deltaY;
+        e.preventDefault();
+      }
+      if (e.deltaX !== 0) {
+        els.canvasHolder.scrollLeft += e.deltaX;
+      }
+    }, { passive: false });
+
     [
       "layoutMode", "alignMode", "stripPadding", "normalizeEnabled", "normalizeTarget",
       "customNormalize", "trimTransparent", "removeChecker", "cleanupMode", "codexCellPadding"
@@ -915,8 +934,17 @@ Codex pet workflow:
 
     els.closeItemBtn.addEventListener("click", e => {
       e.preventDefault();
-      els.itemDialog.close();
+      hideItemPanel();
     });
+  }
+
+  function renderCodexOrderLegend() {
+    els.codexOrderLegend.innerHTML = CODEX_STATES.map((state, index) => `
+      <div>
+        <strong>${index + 1}.</strong>
+        <span>${escapeHtml(state.label)}</span>
+      </div>
+    `).join("");
   }
 
   async function addFiles(fileList) {
@@ -985,7 +1013,7 @@ Codex pet workflow:
 
       const codexState = CODEX_STATES[index];
       const codexText = codexState
-        ? `Codex row ${index}: <strong>${codexState.label}</strong>, ${codexState.frames} used frames`
+        ? `<strong>${index + 1}. ${codexState.label}</strong> · ${codexState.frames} used frames`
         : `<span class="warn">Ignored by Codex export</span>`;
 
       const meta = document.createElement("div");
@@ -1036,22 +1064,30 @@ Codex pet workflow:
     const [item] = state.items.splice(from, 1);
     state.items.splice(to, 0, item);
     renderList();
+    refreshItemPanel();
     scheduleRebuild(80);
   }
 
   function removeItem(index) {
+    const removedId = state.items[index]?.id || null;
     state.items.splice(index, 1);
     renderList();
+    if (state.editItemId === removedId) hideItemPanel();
+    else refreshItemPanel();
     scheduleRebuild(80);
   }
 
   function clearAll() {
+    clearTimeout(state.rebuildTimer);
     state.items = [];
     state.metadata = [];
+    state.editItemId = null;
+    setBusy(false);
     ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
     els.canvas.width = 1;
     els.canvas.height = 1;
     renderList();
+    hideItemPanel();
     updateStats();
     els.downloadBtn.disabled = true;
     els.downloadJsonBtn.disabled = true;
@@ -1063,11 +1099,21 @@ Codex pet workflow:
     const item = getEditingItem();
     if (!item) return;
     populateItemDialog(item);
-    els.itemDialog.showModal();
+    els.itemDialog.classList.add("open");
   }
 
   function getEditingItem() {
     return state.items.find(x => x.id === state.editItemId) || null;
+  }
+
+  function hideItemPanel() {
+    els.itemDialog.classList.remove("open");
+  }
+
+  function refreshItemPanel() {
+    const item = getEditingItem();
+    if (!item) return;
+    populateItemDialog(item);
   }
 
   function populateItemDialog(item) {
@@ -1080,7 +1126,7 @@ Codex pet workflow:
     els.editOffsetY.value = item.offsetY;
     els.editSourceFrames.value = item.sourceFrames;
     els.editCodexState.textContent = codexState
-      ? `Row ${index}: ${codexState.label} (${codexState.frames} used frames)`
+      ? `Position ${index + 1}: ${codexState.label} (${codexState.frames} used frames)`
       : "Not used; Codex export only uses the first 9 loaded strips.";
     drawItemDialogPreview(item);
   }
@@ -1097,6 +1143,7 @@ Codex pet workflow:
     els.editScaleLabel.textContent = `${item.scalePct}%`;
     drawItemDialogPreview(item);
     renderList();
+    refreshItemPanel();
     scheduleRebuild(180);
   }
 
@@ -1306,23 +1353,11 @@ Codex pet workflow:
     tctx.clearRect(0, 0, CODEX_WIDTH, CODEX_HEIGHT);
     tctx.imageSmoothingEnabled = false;
 
-    state.metadata = [];
-
     for (let row = 0; row < CODEX_ROWS; row++) {
       const item = state.items[row];
       const codexState = CODEX_STATES[row];
 
-      if (!item) {
-        state.metadata.push({
-          row,
-          state: codexState.name,
-          label: codexState.label,
-          usedFrames: codexState.frames,
-          source: null,
-          transparent: true
-        });
-        continue;
-      }
+      if (!item) continue;
 
       const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
       const sourceFrames = clampInt(item.sourceFrames, 1, 8, 8);
@@ -1346,24 +1381,6 @@ Codex pet workflow:
         const frameToDraw = els.trimTransparent.checked ? trimCanvas(frame) : frame;
         drawFrameIntoCodexCell(tctx, frameToDraw, row, col, item, innerPadding);
       }
-
-      state.metadata.push({
-        row,
-        state: codexState.name,
-        label: codexState.label,
-        usedFrames: codexState.frames,
-        sourceFrames,
-        source: item.name,
-        x: 0,
-        y: row * CODEX_FRAME_H,
-        width: CODEX_WIDTH,
-        height: CODEX_FRAME_H,
-        cellWidth: CODEX_FRAME_W,
-        cellHeight: CODEX_FRAME_H,
-        scalePct: item.scalePct,
-        offsetX: item.offsetX,
-        offsetY: item.offsetY
-      });
     }
   }
 
@@ -1450,12 +1467,8 @@ Codex pet workflow:
 
     const w = els.canvas.width;
     const h = els.canvas.height;
-    if (els.exportFormat.value === "codex/zip") {
-      els.stats.textContent = `${state.items.length} strip${state.items.length === 1 ? "" : "s"} · Codex preview ${w}×${h}px · 8×9 grid`;
-      return;
-    }
-
-    els.stats.textContent = `${state.items.length} image${state.items.length === 1 ? "" : "s"} · atlas ${w}×${h}px`;
+    const mode = els.exportFormat.value === "codex/zip" ? " · Codex export" : "";
+    els.stats.textContent = `${state.items.length} image${state.items.length === 1 ? "" : "s"} · atlas ${w}×${h}px${mode}`;
   }
 
   function removeFakeChecker(img, width, height, tolerance, mode) {
@@ -1914,6 +1927,7 @@ Codex pet workflow:
   }
 
   setupEvents();
+  renderCodexOrderLegend();
   renderList();
   updateStats();
 })();
