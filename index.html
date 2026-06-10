@@ -2131,6 +2131,9 @@ Codex pet workflow:
             }
 
             ctx.drawImage(item.canvas, drawX, drawY);
+            if (isCodexExportMode()) {
+              drawCodexPreviewOverlay(ctx, item, drawX, drawY);
+            }
 
             state.metadata.push({
               name: item.name,
@@ -2160,6 +2163,49 @@ Codex pet workflow:
             `Built atlas. ${cleanedCount} image${cleanedCount === 1 ? "" : "s"} had checker-like pixels removed.`,
             "ok",
           );
+        }
+
+        function drawCodexPreviewOverlay(targetCtx, item, drawX, drawY) {
+          const boxes = getItemFrameBoxes(item);
+          if (!boxes.length) return;
+
+          const cleaned = makeCleanCanvasFromBitmap(item.bitmap);
+          const padding = calculateCodexInnerPadding(cleaned, boxes);
+          const paddingRatio = padding / Math.min(CODEX_FRAME_W, CODEX_FRAME_H);
+          const sx = item.processedWidth / item.width;
+          const sy = item.processedHeight / item.height;
+
+          targetCtx.save();
+          targetCtx.font = "12px ui-sans-serif, system-ui, sans-serif";
+          targetCtx.textBaseline = "top";
+
+          boxes.forEach((box, index) => {
+            const x = drawX + box.x * sx;
+            const y = drawY + box.y * sy;
+            const w = box.w * sx;
+            const h = box.h * sy;
+            const inset = Math.max(0, Math.min(w, h) * paddingRatio);
+
+            targetCtx.fillStyle = "rgba(124, 183, 255, .08)";
+            targetCtx.strokeStyle = "rgba(124, 183, 255, .9)";
+            targetCtx.lineWidth = 1;
+            targetCtx.fillRect(x, y, w, h);
+            targetCtx.strokeRect(x, y, w, h);
+
+            if (inset > 0 && inset * 2 < w && inset * 2 < h) {
+              targetCtx.strokeStyle = "rgba(255, 216, 155, .92)";
+              targetCtx.setLineDash([4, 3]);
+              targetCtx.strokeRect(x + inset, y + inset, w - inset * 2, h - inset * 2);
+              targetCtx.setLineDash([]);
+            }
+
+            targetCtx.fillStyle = "rgba(16, 20, 28, .88)";
+            targetCtx.fillRect(x + 4, y + 4, 20, 17);
+            targetCtx.fillStyle = "#eef2fb";
+            targetCtx.fillText(String(index + 1), x + 10, y + 6);
+          });
+
+          targetCtx.restore();
         }
 
         function buildCodexAtlasIntoCanvas(targetCanvas) {
