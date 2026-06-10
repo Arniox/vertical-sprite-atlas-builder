@@ -1268,6 +1268,7 @@ Codex pet workflow:
           els.exportFormat.addEventListener("change", () => {
             renderList();
             updateExportModeUI();
+            if (state.items.length) scheduleRebuild(0);
           });
 
           els.zoomOutBtn.addEventListener("click", () =>
