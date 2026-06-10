@@ -481,6 +481,19 @@
         outline: 1px solid rgba(255, 255, 255, 0.08);
       }
 
+      .canvas-stage {
+        position: relative;
+        width: max-content;
+        height: max-content;
+      }
+
+      .guide-canvas {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: transparent;
+      }
+
       .footer {
         border-top: 1px solid var(--line);
         padding: 12px 14px;
@@ -860,7 +873,15 @@ A focused coding companion.</textarea
           </div>
           <div class="canvas-holder" id="canvasHolder">
             <div class="checker">
-              <canvas id="atlasCanvas" width="1" height="1"></canvas>
+              <div class="canvas-stage" id="canvasStage">
+                <canvas id="atlasCanvas" width="1" height="1"></canvas>
+                <canvas
+                  id="guideCanvas"
+                  class="guide-canvas"
+                  width="1"
+                  height="1"
+                ></canvas>
+              </div>
             </div>
           </div>
         </div>
@@ -1055,6 +1076,8 @@ Codex pet workflow:
           codexOrderLegend: $("codexOrderLegend"),
           codexOrderPanel: $("codexOrderPanel"),
           canvas: $("atlasCanvas"),
+          guideCanvas: $("guideCanvas"),
+          canvasStage: $("canvasStage"),
           canvasHolder: $("canvasHolder"),
           canvasShell: $("canvasShell"),
           stats: $("stats"),
@@ -1145,8 +1168,17 @@ Codex pet workflow:
           );
           state.previewZoom = zoom;
           els.zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
-          els.canvas.style.width = `${Math.max(1, Math.round(els.canvas.width * zoom))}px`;
-          els.canvas.style.height = `${Math.max(1, Math.round(els.canvas.height * zoom))}px`;
+          const displayW = Math.max(1, Math.round(els.canvas.width * zoom));
+          const displayH = Math.max(1, Math.round(els.canvas.height * zoom));
+          els.canvas.style.width = `${displayW}px`;
+          els.canvas.style.height = `${displayH}px`;
+          els.canvasStage.style.width = `${displayW}px`;
+          els.canvasStage.style.height = `${displayH}px`;
+          els.guideCanvas.width = displayW;
+          els.guideCanvas.height = displayH;
+          els.guideCanvas.style.width = `${displayW}px`;
+          els.guideCanvas.style.height = `${displayH}px`;
+          renderPreviewGuides();
         }
 
         function setPreviewZoom(value) {
@@ -1540,6 +1572,7 @@ Codex pet workflow:
           state.metadata = [];
           state.editItemId = null;
           ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
+          clearPreviewGuides();
           els.canvas.width = 1;
           els.canvas.height = 1;
           applyPreviewZoom();
@@ -1971,13 +2004,21 @@ Codex pet workflow:
             updateStats();
             els.downloadBtn.disabled = true;
             els.downloadJsonBtn.disabled = true;
+            clearPreviewGuides();
             return;
           }
 
-          const processed = state.items.map(processBaseItem);
-          const normalized = normalizeItems(processed);
-          const transformed = normalized.map(applyItemTransform);
-          buildNormalAtlas(transformed);
+          if (isCodexExportMode()) {
+            buildCodexAtlasIntoCanvas(els.canvas);
+            buildCodexPreviewMetadata();
+            updateStats();
+            log("Codex preview built from detected source cells.", "ok");
+          } else {
+            const processed = state.items.map(processBaseItem);
+            const normalized = normalizeItems(processed);
+            const transformed = normalized.map(applyItemTransform);
+            buildNormalAtlas(transformed);
+          }
 
           els.downloadBtn.disabled = false;
           els.downloadJsonBtn.disabled = false;
