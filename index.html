@@ -916,6 +916,16 @@ A focused coding companion.</textarea
                 </label>
 
                 <div>
+                  <div class="hint">Detected Codex cells</div>
+                  <strong id="editCellSummary"></strong>
+                  <div class="button-row" style="margin-top: 8px">
+                    <button id="detectCellsBtn" type="button">
+                      Redetect cells
+                    </button>
+                  </div>
+                </div>
+
+                <div>
                   <div class="hint">Codex row/state if exported now</div>
                   <strong id="editCodexState"></strong>
                 </div>
@@ -933,7 +943,7 @@ A focused coding companion.</textarea
                   Original preview
                 </div>
                 <div class="mini-checker">
-                  <canvas id="editPreview" width="220" height="160"></canvas>
+                  <canvas id="editPreview" width="320" height="190"></canvas>
                 </div>
               </div>
             </div>
@@ -1002,6 +1012,7 @@ Codex pet workflow:
           rebuildTimer: null,
           busyReasons: new Set(),
           previewZoom: 1,
+          cellDrag: null,
         };
 
         const els = {
@@ -1053,8 +1064,10 @@ Codex pet workflow:
           editOffsetX: $("editOffsetX"),
           editOffsetY: $("editOffsetY"),
           editSourceFrames: $("editSourceFrames"),
+          editCellSummary: $("editCellSummary"),
           editCodexState: $("editCodexState"),
           editPreview: $("editPreview"),
+          detectCellsBtn: $("detectCellsBtn"),
           resetItemBtn: $("resetItemBtn"),
           closeItemBtn: $("closeItemBtn"),
         };
@@ -1256,6 +1269,21 @@ Codex pet workflow:
             els[id].addEventListener("input", applyItemDialogChanges);
           });
 
+          els.detectCellsBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            const item = getEditingItem();
+            if (!item) return;
+            redetectItemCells(item);
+            populateItemDialog(item);
+            renderList();
+            scheduleRebuild(120);
+          });
+
+          els.editPreview.addEventListener("pointerdown", beginCellBoundaryDrag);
+          els.editPreview.addEventListener("pointermove", moveCellBoundaryDrag);
+          els.editPreview.addEventListener("pointerup", endCellBoundaryDrag);
+          els.editPreview.addEventListener("pointerleave", endCellBoundaryDrag);
+
           els.resetItemBtn.addEventListener("click", (e) => {
             e.preventDefault();
             const item = getEditingItem();
@@ -1264,6 +1292,7 @@ Codex pet workflow:
             item.offsetX = 0;
             item.offsetY = 0;
             item.sourceFrames = 8;
+            redetectItemCells(item);
             populateItemDialog(item);
             renderList();
             scheduleRebuild(120);
@@ -1317,6 +1346,7 @@ Codex pet workflow:
                   offsetY: 0,
                   sourceFrames: 8,
                 });
+                redetectItemCells(state.items[state.items.length - 1]);
               } catch (err) {
                 console.warn(err);
                 log(`Could not load ${file.name}`, "warn");
@@ -1487,15 +1517,134 @@ Codex pet workflow:
           populateItemDialog(item);
         }
 
+        function redetectItemCells(item) {
+          const cleaned = makeCleanCanvasFromBitmap(item.bitmap);
+          const count = clampInt(item.sourceFrames, 1, 8, 8);
+          item.frameBoxes = detectSourceCellBoxes(cleaned, count);
+        }
+
+        function getItemFrameBoxes(item) {
+          const count = clampInt(item.sourceFrames, 1, 8, 8);
+          if (!Array.isArray(item.frameBoxes) || item.frameBoxes.length !== count) {
+            redetectItemCells(item);
+          }
+          return item.frameBoxes;
+        }
+
+        function detectSourceCellBoxes(canvas, expectedCount) {
+          const cctx = canvas.getContext("2d", { willReadFrequently: true });
+          const img = cctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = img.data;
+          const columnCounts = new Array(canvas.width).fill(0);
+
+          for (let y = 0; y < canvas.height; y++) {
+            for (let x = 0; x < canvas.width; x++) {
+              if (data[(y * canvas.width + x) * 4 + 3] > 8) {
+                columnCounts[x]++;
+              }
+            }
+          }
+
+          const minPixels = Math.max(1, Math.ceil(canvas.height * 0.015));
+          const active = columnCounts.map((count) => count >= minPixels);
+          closeSmallColumnGaps(active, Math.max(2, Math.round(canvas.width * 0.004)));
+          const groups = findActiveColumnGroups(active)
+            .filter((group) => group.end - group.start + 1 >= 2)
+            .sort((a, b) => a.start - b.start);
+
+          if (groups.length < expectedCount) {
+            return makeEqualSourceBoxes(canvas.width, canvas.height, expectedCount);
+          }
+
+          const selected = reduceGroupsToExpectedCount(groups, expectedCount);
+          const boundaries = [0];
+          for (let i = 1; i < selected.length; i++) {
+            boundaries.push(Math.round((selected[i - 1].end + selected[i].start) / 2));
+          }
+          boundaries.push(canvas.width);
+
+          return selected.map((_, index) => {
+            const x = Math.max(0, Math.min(canvas.width - 1, boundaries[index]));
+            const right = Math.max(x + 1, Math.min(canvas.width, boundaries[index + 1]));
+            return { x, y: 0, w: right - x, h: canvas.height };
+          });
+        }
+
+        function reduceGroupsToExpectedCount(groups, expectedCount) {
+          const reduced = groups.map((group) => ({ ...group }));
+          while (reduced.length > expectedCount) {
+            let mergeIndex = 0;
+            let smallestGap = Infinity;
+            for (let i = 1; i < reduced.length; i++) {
+              const gap = reduced[i].start - reduced[i - 1].end;
+              if (gap < smallestGap) {
+                smallestGap = gap;
+                mergeIndex = i - 1;
+              }
+            }
+            reduced[mergeIndex] = {
+              start: reduced[mergeIndex].start,
+              end: reduced[mergeIndex + 1].end,
+            };
+            reduced.splice(mergeIndex + 1, 1);
+          }
+          return reduced;
+        }
+
+        function closeSmallColumnGaps(active, maxGap) {
+          let x = 0;
+          while (x < active.length) {
+            if (active[x]) {
+              x++;
+              continue;
+            }
+            const start = x;
+            while (x < active.length && !active[x]) x++;
+            const end = x - 1;
+            if (
+              start > 0 &&
+              x < active.length &&
+              end - start + 1 <= maxGap
+            ) {
+              for (let i = start; i <= end; i++) active[i] = true;
+            }
+          }
+        }
+
+        function findActiveColumnGroups(active) {
+          const groups = [];
+          let x = 0;
+          while (x < active.length) {
+            while (x < active.length && !active[x]) x++;
+            if (x >= active.length) break;
+            const start = x;
+            while (x < active.length && active[x]) x++;
+            groups.push({ start, end: x - 1 });
+          }
+          return groups;
+        }
+
+        function makeEqualSourceBoxes(width, height, count) {
+          const boxes = [];
+          for (let i = 0; i < count; i++) {
+            const x = Math.round((width / count) * i);
+            const right = i === count - 1 ? width : Math.round((width / count) * (i + 1));
+            boxes.push({ x, y: 0, w: Math.max(1, right - x), h: height });
+          }
+          return boxes;
+        }
+
         function populateItemDialog(item) {
           const index = state.items.findIndex((x) => x.id === item.id);
           const codexState = CODEX_STATES[index];
+          const boxes = getItemFrameBoxes(item);
           els.editName.textContent = item.name;
           els.editScale.value = item.scalePct;
           els.editScaleLabel.textContent = `${item.scalePct}%`;
           els.editOffsetX.value = item.offsetX;
           els.editOffsetY.value = item.offsetY;
           els.editSourceFrames.value = item.sourceFrames;
+          els.editCellSummary.textContent = `${boxes.length} numbered cell${boxes.length === 1 ? "" : "s"} detected`;
           els.editCodexState.textContent = codexState
             ? `Position ${index + 1}: ${codexState.label} (${codexState.frames} used frames)`
             : "Not used; Codex export only uses the first 9 loaded strips.";
@@ -1509,7 +1658,11 @@ Codex pet workflow:
           item.scalePct = clampInt(els.editScale.value, 10, 300, 100);
           item.offsetX = clampInt(els.editOffsetX.value, -9999, 9999, 0);
           item.offsetY = clampInt(els.editOffsetY.value, -9999, 9999, 0);
+          const previousSourceFrames = item.sourceFrames;
           item.sourceFrames = clampInt(els.editSourceFrames.value, 1, 8, 8);
+          if (item.sourceFrames !== previousSourceFrames) {
+            redetectItemCells(item);
+          }
 
           els.editScaleLabel.textContent = `${item.scalePct}%`;
           drawItemDialogPreview(item);
@@ -1533,6 +1686,136 @@ Codex pet workflow:
           const x = Math.round((c.width - w) / 2 + item.offsetX * 0.25);
           const y = Math.round((c.height - h) / 2 + item.offsetY * 0.25);
           cctx.drawImage(item.bitmap, x, y, w, h);
+          state.editPreviewTransform = { x, y, scale };
+          drawSourceCellOverlay(cctx, item, x, y, scale);
+        }
+
+        function drawSourceCellOverlay(cctx, item, offsetX, offsetY, scale) {
+          const boxes = getItemFrameBoxes(item);
+          cctx.save();
+          cctx.lineWidth = 1;
+          cctx.font = "11px ui-sans-serif, system-ui, sans-serif";
+          cctx.textBaseline = "top";
+
+          boxes.forEach((box, index) => {
+            const x = offsetX + box.x * scale;
+            const y = offsetY + box.y * scale;
+            const w = box.w * scale;
+            const h = box.h * scale;
+            cctx.fillStyle = "rgba(124, 183, 255, .12)";
+            cctx.strokeStyle = "rgba(124, 183, 255, .95)";
+            cctx.fillRect(x, y, w, h);
+            cctx.strokeRect(x, y, w, h);
+            cctx.fillStyle = "rgba(16, 20, 28, .88)";
+            cctx.fillRect(x + 3, y + 3, 18, 16);
+            cctx.fillStyle = "#eef2fb";
+            cctx.fillText(String(index + 1), x + 8, y + 5);
+          });
+
+          cctx.restore();
+        }
+
+        function getEditPreviewSourcePoint(e) {
+          const transform = state.editPreviewTransform;
+          if (!transform) return null;
+          const rect = els.editPreview.getBoundingClientRect();
+          return {
+            x: (e.clientX - rect.left - transform.x) / transform.scale,
+            y: (e.clientY - rect.top - transform.y) / transform.scale,
+          };
+        }
+
+        function findCellBoundaryAtPoint(item, sourceX) {
+          const transform = state.editPreviewTransform;
+          if (!transform) return null;
+          const threshold = 8 / transform.scale;
+          const boxes = getItemFrameBoxes(item);
+          const boundaries = [boxes[0].x];
+          for (let i = 1; i < boxes.length; i++) boundaries.push(boxes[i].x);
+          boundaries.push(boxes[boxes.length - 1].x + boxes[boxes.length - 1].w);
+
+          let best = null;
+          boundaries.forEach((x, index) => {
+            const distance = Math.abs(sourceX - x);
+            if (distance <= threshold && (!best || distance < best.distance)) {
+              best = { index, distance };
+            }
+          });
+          return best;
+        }
+
+        function beginCellBoundaryDrag(e) {
+          const item = getEditingItem();
+          if (!item) return;
+          const point = getEditPreviewSourcePoint(e);
+          if (!point) return;
+          const boundary = findCellBoundaryAtPoint(item, point.x);
+          if (!boundary) return;
+          state.cellDrag = { itemId: item.id, boundaryIndex: boundary.index };
+          els.editPreview.setPointerCapture(e.pointerId);
+          e.preventDefault();
+        }
+
+        function moveCellBoundaryDrag(e) {
+          const item = getEditingItem();
+          const point = getEditPreviewSourcePoint(e);
+          if (!item || !point) return;
+
+          if (!state.cellDrag) {
+            els.editPreview.style.cursor = findCellBoundaryAtPoint(item, point.x)
+              ? "ew-resize"
+              : "default";
+            return;
+          }
+
+          applyCellBoundaryDrag(item, state.cellDrag.boundaryIndex, point.x);
+          drawItemDialogPreview(item);
+          scheduleRebuild(120);
+          e.preventDefault();
+        }
+
+        function endCellBoundaryDrag(e) {
+          if (state.cellDrag && e.pointerId != null) {
+            try {
+              els.editPreview.releasePointerCapture(e.pointerId);
+            } catch {
+              // The pointer may have left the canvas before capture was established.
+            }
+          }
+          state.cellDrag = null;
+        }
+
+        function applyCellBoundaryDrag(item, boundaryIndex, sourceX) {
+          const boxes = getItemFrameBoxes(item);
+          if (!boxes.length) return;
+          const minCellWidth = 2;
+
+          if (boundaryIndex === 0) {
+            const box = boxes[0];
+            const right = box.x + box.w;
+            const x = Math.max(0, Math.min(right - minCellWidth, Math.round(sourceX)));
+            box.x = x;
+            box.w = right - x;
+            return;
+          }
+
+          if (boundaryIndex === boxes.length) {
+            const box = boxes[boxes.length - 1];
+            const right = Math.max(box.x + minCellWidth, Math.min(item.width, Math.round(sourceX)));
+            box.w = right - box.x;
+            return;
+          }
+
+          const left = boxes[boundaryIndex - 1];
+          const right = boxes[boundaryIndex];
+          const currentRight = right.x + right.w;
+          const x = Math.max(
+            left.x + minCellWidth,
+            Math.min(currentRight - minCellWidth, Math.round(sourceX)),
+          );
+          left.w = x - left.x;
+          right.x = x;
+          right.w = currentRight - x;
         }
 
         function clampInt(value, min, max, fallback) {
@@ -1754,27 +2037,23 @@ Codex pet workflow:
             if (!item) continue;
 
             const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
-            const sourceFrames = clampInt(item.sourceFrames, 1, 8, 8);
-            const sourceFrameW = cleanedStrip.width / sourceFrames;
-            const sourceFrameH = cleanedStrip.height;
-            const innerPadding = Math.max(
-              0,
-              Math.min(80, Number(els.codexCellPadding.value) || 0),
-            );
+            const boxes = getItemFrameBoxes(item);
+            const sourceFrames = boxes.length;
+            const innerPadding = calculateCodexInnerPadding(cleanedStrip, boxes);
 
             for (let col = 0; col < codexState.frames; col++) {
-              const sourceCol = Math.min(col, sourceFrames - 1);
+              const box = boxes[Math.min(col, sourceFrames - 1)];
               const frame = document.createElement("canvas");
-              frame.width = Math.max(1, Math.round(sourceFrameW));
-              frame.height = Math.max(1, Math.round(sourceFrameH));
+              frame.width = Math.max(1, Math.round(box.w));
+              frame.height = Math.max(1, Math.round(box.h));
               const fctx = frame.getContext("2d", { willReadFrequently: true });
               fctx.imageSmoothingEnabled = false;
               fctx.drawImage(
                 cleanedStrip,
-                sourceCol * sourceFrameW,
-                0,
-                sourceFrameW,
-                sourceFrameH,
+                box.x,
+                box.y,
+                box.w,
+                box.h,
                 0,
                 0,
                 frame.width,
@@ -1794,6 +2073,48 @@ Codex pet workflow:
               );
             }
           }
+        }
+
+        function calculateCodexInnerPadding(sourceCanvas, boxes) {
+          const measured = boxes
+            .map((box) => measureContentPaddingRatio(sourceCanvas, box))
+            .filter((value) => Number.isFinite(value));
+
+          if (!measured.length) {
+            return Math.max(0, Math.min(80, Number(els.codexCellPadding.value) || 0));
+          }
+
+          measured.sort((a, b) => a - b);
+          const ratio = measured[Math.floor(measured.length / 2)];
+          return Math.max(0, Math.min(80, Math.round(Math.min(CODEX_FRAME_W, CODEX_FRAME_H) * ratio)));
+        }
+
+        function measureContentPaddingRatio(sourceCanvas, box) {
+          const cctx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+          const x = Math.max(0, Math.round(box.x));
+          const y = Math.max(0, Math.round(box.y));
+          const w = Math.max(1, Math.min(sourceCanvas.width - x, Math.round(box.w)));
+          const h = Math.max(1, Math.min(sourceCanvas.height - y, Math.round(box.h)));
+          const img = cctx.getImageData(x, y, w, h);
+          const data = img.data;
+          let minX = w;
+          let minY = h;
+          let maxX = -1;
+          let maxY = -1;
+
+          for (let py = 0; py < h; py++) {
+            for (let px = 0; px < w; px++) {
+              if (data[(py * w + px) * 4 + 3] <= 8) continue;
+              if (px < minX) minX = px;
+              if (py < minY) minY = py;
+              if (px > maxX) maxX = px;
+              if (py > maxY) maxY = py;
+            }
+          }
+
+          if (maxX < minX || maxY < minY) return NaN;
+          const pad = Math.min(minX, minY, w - maxX - 1, h - maxY - 1);
+          return Math.max(0, pad / Math.min(w, h));
         }
 
         function buildCodexMetadata() {
@@ -1821,6 +2142,13 @@ Codex pet workflow:
               label: codexState.label,
               usedFrames: codexState.frames,
               sourceFrames: clampInt(item.sourceFrames, 1, 8, 8),
+              sourceCells: getItemFrameBoxes(item).map((box, index) => ({
+                index: index + 1,
+                x: box.x,
+                y: box.y,
+                width: box.w,
+                height: box.h,
+              })),
               source: item.name,
               x: 0,
               y: row * CODEX_FRAME_H,
@@ -2279,13 +2607,6 @@ Codex pet workflow:
               spritesheetPath: "spritesheet.webp",
             };
 
-            triggerDownload(
-              new Blob([JSON.stringify(manifest, null, 2)], {
-                type: "application/json",
-              }),
-              "pet.json",
-            );
-
             const zipBytes = makeZip([
               {
                 name: `${petId}/pet.json`,
@@ -2300,7 +2621,7 @@ Codex pet workflow:
             const blob = new Blob([zipBytes], { type: "application/zip" });
             triggerDownload(blob, `${petId}.codex-pet.zip`);
 
-            log(`Exported "${petId}.codex-pet.zip" and "pet.json".`, "ok");
+            log(`Exported "${petId}.codex-pet.zip".`, "ok");
           } finally {
             setBusy(false, "export");
           }
