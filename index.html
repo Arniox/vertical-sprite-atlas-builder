@@ -1868,13 +1868,30 @@ Codex pet workflow:
           return best;
         }
 
+        function findCellAtPoint(item, point) {
+          const boxes = getItemFrameBoxes(item);
+          return boxes.findIndex(
+            (box) =>
+              point.x >= box.x &&
+              point.x <= box.x + box.w &&
+              point.y >= box.y &&
+              point.y <= box.y + box.h,
+          );
+        }
+
         function beginCellBoundaryDrag(e) {
           const item = getEditingItem();
           if (!item) return;
           const point = getEditPreviewSourcePoint(e);
           if (!point) return;
           const boundary = findCellBoundaryAtPoint(item, point.x);
-          if (!boundary) return;
+          if (!boundary) {
+            const index = findCellAtPoint(item, point);
+            state.selectedCellIndex = index >= 0 ? index : null;
+            populateItemDialog(item);
+            e.preventDefault();
+            return;
+          }
           state.cellDrag = { itemId: item.id, boundaryIndex: boundary.index };
           els.editPreview.setPointerCapture(e.pointerId);
           e.preventDefault();
