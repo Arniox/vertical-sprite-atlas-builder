@@ -773,7 +773,7 @@ A focused coding companion.</textarea
             </label>
 
             <label>
-              Codex cell inner padding
+              Fallback Codex padding
               <input
                 id="codexCellPadding"
                 type="number"
@@ -783,7 +783,8 @@ A focused coding companion.</textarea
                 value="0"
               />
               <span class="hint"
-                >Transparent padding inside each 192×208 Codex frame cell.</span
+                >Used only if automatic padding cannot be measured from the
+                detected cells.</span
               >
             </label>
           </div>
@@ -900,7 +901,7 @@ A focused coding companion.</textarea
                 </div>
 
                 <label>
-                  Codex source frames in this strip
+                  Codex source cells in this strip
                   <input
                     id="editSourceFrames"
                     type="number"
@@ -910,8 +911,8 @@ A focused coding companion.</textarea
                     value="8"
                   />
                   <span class="hint"
-                    >For Codex export, the strip is split into this many equal
-                    source frames. The output row still has 8 cells.</span
+                    >Changing this redetects numbered source cells for Codex
+                    export.</span
                   >
                 </label>
 
