@@ -1928,6 +1928,7 @@ Codex pet workflow:
             return;
           }
           state.cellDrag = { itemId: item.id, boundaryIndex: boundary.index };
+          state.cellDragDirty = false;
           els.editPreview.setPointerCapture(e.pointerId);
           e.preventDefault();
         }
@@ -1945,12 +1946,13 @@ Codex pet workflow:
           }
 
           applyCellBoundaryDrag(item, state.cellDrag.boundaryIndex, point.x);
+          state.cellDragDirty = true;
           drawItemDialogPreview(item);
-          scheduleRebuild(120);
           e.preventDefault();
         }
 
         function endCellBoundaryDrag(e) {
+          const shouldRebuild = state.cellDragDirty;
           if (state.cellDrag && e.pointerId != null) {
             try {
               els.editPreview.releasePointerCapture(e.pointerId);
@@ -1959,6 +1961,11 @@ Codex pet workflow:
             }
           }
           state.cellDrag = null;
+          state.cellDragDirty = false;
+          if (shouldRebuild) {
+            renderList();
+            scheduleRebuild(220);
+          }
         }
 
         function applyCellBoundaryDrag(item, boundaryIndex, sourceX) {
