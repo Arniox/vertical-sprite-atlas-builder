@@ -35,7 +35,7 @@
 
   header {
     padding: 24px 24px 12px;
-    max-width: 1480px;
+    max-width: 1880px;
     margin: 0 auto;
   }
 
@@ -52,15 +52,15 @@
   }
 
   main {
-    max-width: 1480px;
+    max-width: 1880px;
     margin: 0 auto;
     padding: 12px 24px 34px;
     display: grid;
-    grid-template-columns: 430px minmax(0, 1fr) 390px;
-    gap: 18px;
+    grid-template-columns: minmax(420px, 30rem) minmax(760px, 1.8fr) minmax(420px, 32rem);
+    gap: 20px;
   }
 
-  @media (max-width: 1000px) {
+  @media (max-width: 1380px) {
     main { grid-template-columns: 1fr; }
   }
 
@@ -211,9 +211,9 @@
   .list {
     display: grid;
     gap: 8px;
-    max-height: 48vh;
+    max-height: min(58vh, 860px);
     overflow: auto;
-    padding-right: 4px;
+    padding: 4px 2px 2px 0;
   }
 
   .item {
@@ -288,9 +288,10 @@
 
   .preview-wrap {
     padding: 0;
-    min-height: 610px;
+    min-height: min(78vh, 980px);
+    height: calc(100vh - 126px);
     display: grid;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .toolbar {
@@ -303,6 +304,24 @@
     flex-wrap: wrap;
   }
 
+  .preview-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .zoom-readout {
+    min-width: 54px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .zoom-slider {
+    width: 150px;
+  }
+
   .stats {
     color: var(--muted);
     font-size: 13px;
@@ -310,13 +329,15 @@
 
   .canvas-shell {
     position: relative;
-    min-height: 470px;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .canvas-holder {
     overflow: auto;
     padding: 20px;
-    min-height: 470px;
+    height: 100%;
+    min-height: 0;
     transition: filter .14s ease, opacity .14s ease;
     overscroll-behavior: contain;
   }
@@ -361,6 +382,7 @@
     min-height: 100%;
     border-radius: 14px;
     padding: 14px;
+    display: inline-block;
     background:
       linear-gradient(45deg, #2a2f3d 25%, transparent 25%),
       linear-gradient(-45deg, #2a2f3d 25%, transparent 25%),
@@ -424,6 +446,10 @@
     display: block;
   }
 
+  .codex-only[hidden] {
+    display: none !important;
+  }
+
   .dialog-grid {
     display: grid;
     grid-template-columns: 1fr;
@@ -448,7 +474,7 @@
   .codex-order {
     display: grid;
     gap: 5px;
-    margin: 10px 0 14px;
+    margin: 10px 0 8px;
     padding: 10px;
     border: 1px solid #32384a;
     border-radius: 12px;
@@ -622,6 +648,13 @@
   <section class="card preview-wrap">
     <div class="toolbar">
       <div class="stats" id="stats">No images loaded.</div>
+      <div class="preview-controls">
+        <button id="zoomOutBtn" type="button" title="Zoom out">-</button>
+        <span class="zoom-readout" id="zoomLabel">100%</span>
+        <input id="zoomRange" class="zoom-slider" type="range" min="0.25" max="6" value="1" step="0.05">
+        <button id="zoomInBtn" type="button" title="Zoom in">+</button>
+        <button id="zoomResetBtn" type="button" title="Reset zoom">Reset zoom</button>
+      </div>
       <div class="button-row" style="margin:0">
         <button id="downloadBtn" class="primary" disabled>Export</button>
         <button id="downloadJsonBtn" disabled>Export metadata JSON</button>
@@ -649,9 +682,11 @@
     <section class="card">
       <h2>Reorder</h2>
       <div class="content">
-        <div class="hint">Codex order is fixed. Match the loaded strips to these rows before exporting a pet package.</div>
-        <div class="codex-order" id="codexOrderLegend"></div>
-        <div class="section-title" style="margin-top:14px">Loaded strips</div>
+        <div class="codex-only" id="codexOrderPanel">
+          <div class="hint">Codex order is fixed. Match the loaded strips to these rows before exporting a pet package.</div>
+          <div class="codex-order" id="codexOrderLegend"></div>
+        </div>
+        <div class="section-title" style="margin:12px 0 6px">Loaded strips</div>
         <div class="list" id="list"></div>
       </div>
     </section>
@@ -765,7 +800,8 @@ Codex pet workflow:
     metadata: [],
     editItemId: null,
     rebuildTimer: null,
-    busyReasons: new Set()
+    busyReasons: new Set(),
+    previewZoom: 1
   };
 
   const els = {
@@ -773,6 +809,7 @@ Codex pet workflow:
     fileInput: $("fileInput"),
     list: $("list"),
     codexOrderLegend: $("codexOrderLegend"),
+    codexOrderPanel: $("codexOrderPanel"),
     canvas: $("atlasCanvas"),
     canvasHolder: $("canvasHolder"),
     canvasShell: $("canvasShell"),
@@ -795,6 +832,11 @@ Codex pet workflow:
     tolLabel: $("tolLabel"),
     cleanupMode: $("cleanupMode"),
     exportFormat: $("exportFormat"),
+    zoomOutBtn: $("zoomOutBtn"),
+    zoomInBtn: $("zoomInBtn"),
+    zoomResetBtn: $("zoomResetBtn"),
+    zoomRange: $("zoomRange"),
+    zoomLabel: $("zoomLabel"),
     quality: $("quality"),
     qualityLabel: $("qualityLabel"),
     petId: $("petId"),
@@ -830,6 +872,29 @@ Codex pet workflow:
   function log(message, kind = "") {
     const cls = kind === "warn" ? "warn" : kind === "ok" ? "ok" : "";
     els.log.innerHTML = `<span class="${cls}">${escapeHtml(message)}</span>`;
+  }
+
+  function isCodexExportMode() {
+    return els.exportFormat.value === "codex/zip";
+  }
+
+  function applyPreviewZoom() {
+    const zoom = Math.max(0.25, Math.min(6, Number(state.previewZoom) || 1));
+    state.previewZoom = zoom;
+    els.zoomRange.value = String(zoom);
+    els.zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+    els.canvas.style.width = `${Math.max(1, Math.round(els.canvas.width * zoom))}px`;
+    els.canvas.style.height = `${Math.max(1, Math.round(els.canvas.height * zoom))}px`;
+  }
+
+  function setPreviewZoom(value) {
+    state.previewZoom = Math.max(0.25, Math.min(6, Number(value) || 1));
+    applyPreviewZoom();
+  }
+
+  function updateExportModeUI() {
+    els.codexOrderPanel.hidden = !isCodexExportMode();
+    updateStats();
   }
 
   function syncBusy() {
@@ -878,6 +943,11 @@ Codex pet workflow:
     els.dropZone.addEventListener("drop", e => addFiles(e.dataTransfer.files));
 
     els.canvasHolder.addEventListener("wheel", e => {
+      if (e.ctrlKey || e.metaKey) {
+        setPreviewZoom(state.previewZoom - e.deltaY * 0.0025);
+        e.preventDefault();
+        return;
+      }
       if (!els.canvasHolder.scrollHeight || !els.canvasHolder.scrollWidth) return;
       if (e.shiftKey) {
         els.canvasHolder.scrollLeft += e.deltaY;
@@ -901,8 +971,13 @@ Codex pet workflow:
 
     els.exportFormat.addEventListener("change", () => {
       renderList();
-      updateStats();
+      updateExportModeUI();
     });
+
+    els.zoomRange.addEventListener("input", () => setPreviewZoom(els.zoomRange.value));
+    els.zoomOutBtn.addEventListener("click", () => setPreviewZoom(state.previewZoom - 0.25));
+    els.zoomInBtn.addEventListener("click", () => setPreviewZoom(state.previewZoom + 0.25));
+    els.zoomResetBtn.addEventListener("click", () => setPreviewZoom(1));
 
     els.tolerance.addEventListener("input", () => {
       els.tolLabel.textContent = els.tolerance.value;
@@ -1092,6 +1167,7 @@ Codex pet workflow:
     ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
     els.canvas.width = 1;
     els.canvas.height = 1;
+    applyPreviewZoom();
     renderList();
     hideItemPanel();
     updateStats();
@@ -1188,6 +1264,7 @@ Codex pet workflow:
 
     els.downloadBtn.disabled = false;
     els.downloadJsonBtn.disabled = false;
+    applyPreviewZoom();
   }
 
   function processBaseItem(item) {
@@ -1473,7 +1550,7 @@ Codex pet workflow:
 
     const w = els.canvas.width;
     const h = els.canvas.height;
-    const mode = els.exportFormat.value === "codex/zip" ? " · Codex export" : "";
+    const mode = isCodexExportMode() ? " · Codex export" : "";
     els.stats.textContent = `${state.items.length} image${state.items.length === 1 ? "" : "s"} · atlas ${w}×${h}px${mode}`;
   }
 
@@ -1750,6 +1827,17 @@ Codex pet workflow:
     }, type, quality);
   }
 
+  function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
   async function downloadCodexPackage() {
     setBusy(true, "export");
     try {
@@ -1770,22 +1858,20 @@ Codex pet workflow:
         spritesheetPath: "spritesheet.webp"
       };
 
+      triggerDownload(
+        new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" }),
+        "pet.json"
+      );
+
       const zipBytes = makeZip([
         { name: `${petId}/pet.json`, data: encodeText(JSON.stringify(manifest, null, 2)) },
         { name: `${petId}/spritesheet.webp`, data: new Uint8Array(await spriteBlob.arrayBuffer()) }
       ]);
 
       const blob = new Blob([zipBytes], { type: "application/zip" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${petId}.codex-pet.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      triggerDownload(blob, `${petId}.codex-pet.zip`);
 
-      log(`Exported Codex package "${petId}.codex-pet.zip".`, "ok");
+      log(`Exported "${petId}.codex-pet.zip" and "pet.json".`, "ok");
     } finally {
       setBusy(false, "export");
     }
@@ -1943,8 +2029,9 @@ Codex pet workflow:
 
   setupEvents();
   renderCodexOrderLegend();
+  updateExportModeUI();
+  applyPreviewZoom();
   renderList();
-  updateStats();
 })();
 </script>
 </body>
