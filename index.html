@@ -2266,6 +2266,88 @@ Codex pet workflow:
           }
         }
 
+        function buildCodexPreviewMetadata() {
+          state.metadata = [];
+
+          for (let row = 0; row < CODEX_ROWS; row++) {
+            const item = state.items[row];
+            const codexState = CODEX_STATES[row];
+            if (!item) {
+              state.metadata.push({
+                row,
+                state: codexState.name,
+                label: codexState.label,
+                source: null,
+                guideCells: [],
+              });
+              continue;
+            }
+
+            const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
+            const boxes = getItemFrameBoxes(item);
+            const padding = calculateCodexInnerPadding(cleanedStrip, boxes);
+            state.metadata.push({
+              row,
+              state: codexState.name,
+              label: codexState.label,
+              source: item.name,
+              normalizedPadding: padding,
+              guideCells: Array.from({ length: codexState.frames }, (_, col) => ({
+                index: col + 1,
+                x: col * CODEX_FRAME_W,
+                y: row * CODEX_FRAME_H,
+                width: CODEX_FRAME_W,
+                height: CODEX_FRAME_H,
+                padding,
+              })),
+            });
+          }
+        }
+
+        function clearPreviewGuides() {
+          const gctx = els.guideCanvas.getContext("2d");
+          gctx.clearRect(0, 0, els.guideCanvas.width, els.guideCanvas.height);
+        }
+
+        function renderPreviewGuides() {
+          clearPreviewGuides();
+          if (!isCodexExportMode() || !state.items.length) return;
+
+          const zoom = state.previewZoom;
+          const gctx = els.guideCanvas.getContext("2d");
+          gctx.save();
+          gctx.font = "11px ui-sans-serif, system-ui, sans-serif";
+          gctx.textBaseline = "top";
+          gctx.lineWidth = 1;
+
+          for (const row of state.metadata) {
+            for (const cell of row.guideCells || []) {
+              const x = Math.round(cell.x * zoom) + 0.5;
+              const y = Math.round(cell.y * zoom) + 0.5;
+              const w = Math.round(cell.width * zoom);
+              const h = Math.round(cell.height * zoom);
+              const pad = Math.round(cell.padding * zoom);
+
+              gctx.strokeStyle = "rgba(124, 183, 255, .98)";
+              gctx.strokeRect(x, y, w, h);
+
+              if (pad > 0 && pad * 2 < w && pad * 2 < h) {
+                gctx.strokeStyle = "rgba(255, 216, 155, .96)";
+                gctx.setLineDash([5, 4]);
+                gctx.strokeRect(x + pad, y + pad, w - pad * 2, h - pad * 2);
+                gctx.setLineDash([]);
+              }
+
+              gctx.fillStyle = "rgba(16, 20, 28, .88)";
+              gctx.fillRect(x + 4, y + 4, 20, 16);
+              gctx.fillStyle = "#eef2fb";
+              gctx.fillText(String(cell.index), x + 10, y + 6);
+            }
+          }
+
+          gctx.restore();
+        }
+
         function calculateCodexInnerPadding(sourceCanvas, boxes) {
           const measured = boxes
             .map((box) => measureContentPaddingRatio(sourceCanvas, box))
