@@ -2281,7 +2281,7 @@ Codex pet workflow:
 
           for (const mask of state.maskEdit.draftMasks || []) {
             if (mask.cellIndex !== state.selectedCellIndex) continue;
-            drawMaskStrokePreview(mctx, mask, pad, zoom);
+            drawMaskStrokePreview(mctx, mask, pad, pad, zoom);
           }
         }
 
@@ -2408,7 +2408,7 @@ Codex pet workflow:
           return [];
         }
 
-        function drawMaskStrokePreview(ctx, mask, offsetX, zoom) {
+        function drawMaskStrokePreview(ctx, mask, offsetX, offsetY, zoom) {
           const points = getMaskPoints(mask);
           if (!points.length) return;
           ctx.save();
@@ -2426,19 +2426,19 @@ Codex pet workflow:
           ctx.beginPath();
           ctx.moveTo(
             offsetX + points[0].x * zoom,
-            offsetX + points[0].y * zoom,
+            offsetY + points[0].y * zoom,
           );
           for (let i = 1; i < points.length; i++) {
             ctx.lineTo(
               offsetX + points[i].x * zoom,
-              offsetX + points[i].y * zoom,
+              offsetY + points[i].y * zoom,
             );
           }
           if (points.length === 1) {
             ctx.beginPath();
             ctx.arc(
               offsetX + points[0].x * zoom,
-              offsetX + points[0].y * zoom,
+              offsetY + points[0].y * zoom,
               Math.max(1, (Number(mask.r) || 10) * zoom),
               0,
               Math.PI * 2,
