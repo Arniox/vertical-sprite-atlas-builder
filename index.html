@@ -1658,11 +1658,11 @@ Codex pet workflow:
 
             const codexState = CODEX_STATES[index];
             const usedFrames = codexState
-              ? Math.min(codexState.frames, getItemFrameBoxes(item).length)
+              ? getItemFrameBoxes(item).length
               : 0;
             const detectedFrames = getItemFrameBoxes(item).length;
             const codexText = codexState
-              ? `<strong>${index + 1}. ${codexState.label}</strong> · ${detectedFrames} detected, ${usedFrames} used for Codex`
+              ? `<strong>${index + 1}. ${codexState.label}</strong> · ${detectedFrames} detected, ${usedFrames} in preview/export`
               : `<span class="warn">Ignored by Codex export</span>`;
 
             const meta = document.createElement("div");
@@ -2024,7 +2024,7 @@ Codex pet workflow:
             state.selectedCellIndex,
           );
           els.editCodexState.textContent = codexState
-            ? `Position ${index + 1}: ${codexState.label} (${boxes.length} detected, ${Math.min(codexState.frames, boxes.length)} used for Codex)`
+            ? `Position ${index + 1}: ${codexState.label} (${boxes.length} detected, ${boxes.length} in preview/export, Codex expects ${codexState.frames})`
             : "Not used; Codex export only uses the first 9 loaded strips.";
           drawItemDialogPreview(item);
         }
