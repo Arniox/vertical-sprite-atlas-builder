@@ -2834,7 +2834,7 @@ Codex pet workflow:
 
             const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
             const boxes = getItemFrameBoxes(item);
-            const outputFrames = Math.min(CODEX_COLS, boxes.length);
+            const outputFrames = Math.min(codexState.frames, boxes.length);
             const effectiveBoxes = getEffectiveCellBoxes(item, boxes);
             const sourceFrames = Array.from(
               { length: outputFrames },
@@ -2887,7 +2887,7 @@ Codex pet workflow:
             const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
             const boxes = getItemFrameBoxes(item);
             const effectiveBoxes = getEffectiveCellBoxes(item, boxes);
-            const outputFrames = Math.min(CODEX_COLS, boxes.length);
+            const outputFrames = Math.min(codexState.frames, boxes.length);
             const sourceFrames = Array.from(
               { length: outputFrames },
               (_, col) =>
@@ -3057,7 +3057,7 @@ Codex pet workflow:
               row,
               state: codexState.name,
               label: codexState.label,
-              usedFrames: Math.min(CODEX_COLS, getItemFrameBoxes(item).length),
+              usedFrames: Math.min(codexState.frames, getItemFrameBoxes(item).length),
               maxFrames: CODEX_COLS,
               expectedFrames: codexState.frames,
               sourceFrames: getItemFrameBoxes(item).length,
