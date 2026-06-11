@@ -2362,6 +2362,7 @@ Codex pet workflow:
 
         function clearSelectedCellMask() {
           if (!Number.isInteger(state.selectedCellIndex)) return;
+          state.maskEdit.activeStroke = null;
           state.maskEdit.draftMasks = (state.maskEdit.draftMasks || []).filter(
             (mask) => mask.cellIndex !== state.selectedCellIndex,
           );
