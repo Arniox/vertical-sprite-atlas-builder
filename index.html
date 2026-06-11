@@ -654,6 +654,12 @@
         max-width: 100%;
       }
 
+      .warn-inline {
+        color: #ff8e8e;
+        font-size: 13px;
+        white-space: nowrap;
+      }
+
       .codex-order {
         display: grid;
         gap: 5px;
@@ -886,6 +892,7 @@ A focused coding companion.</textarea
           <div class="stats" id="stats">No images loaded.</div>
           <div class="button-row" style="margin: 0">
             <button id="downloadBtn" class="primary" disabled>Export</button>
+            <span id="codexWarning" class="warn-inline" hidden></span>
             <button id="downloadJsonBtn" disabled>Export metadata JSON</button>
           </div>
         </div>
