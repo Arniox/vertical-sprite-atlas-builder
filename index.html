@@ -2871,7 +2871,7 @@ Codex pet workflow:
           );
         }
 
-        function buildCodexAtlasIntoCanvas(targetCanvas, mode = "export") {
+        function buildCodexAtlasIntoCanvas(targetCanvas) {
           targetCanvas.width = CODEX_WIDTH;
           targetCanvas.height = CODEX_HEIGHT;
           const tctx = targetCanvas.getContext("2d", {
@@ -2882,16 +2882,12 @@ Codex pet workflow:
 
           for (let row = 0; row < CODEX_ROWS; row++) {
             const item = state.items[row];
-            const codexState = CODEX_STATES[row];
 
             if (!item) continue;
 
             const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
             const boxes = getItemFrameBoxes(item);
-            const outputFrames =
-              mode === "preview"
-                ? boxes.length
-                : Math.min(codexState.frames, boxes.length);
+            const outputFrames = boxes.length;
             const effectiveBoxes = getEffectiveCellBoxes(item, boxes);
             const sourceFrames = Array.from(
               { length: outputFrames },
@@ -2924,7 +2920,7 @@ Codex pet workflow:
           }
         }
 
-        function buildCodexPreviewMetadata(mode = "export") {
+        function buildCodexPreviewMetadata() {
           state.metadata = [];
 
           for (let row = 0; row < CODEX_ROWS; row++) {
@@ -2944,10 +2940,7 @@ Codex pet workflow:
             const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
             const boxes = getItemFrameBoxes(item);
             const effectiveBoxes = getEffectiveCellBoxes(item, boxes);
-            const outputFrames =
-              mode === "preview"
-                ? boxes.length
-                : Math.min(codexState.frames, boxes.length);
+            const outputFrames = boxes.length;
             const sourceFrames = Array.from(
               { length: outputFrames },
               (_, col) =>
