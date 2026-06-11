@@ -2637,8 +2637,8 @@ Codex pet workflow:
           }
 
           if (isCodexExportMode()) {
-            buildCodexAtlasIntoCanvas(els.canvas);
-            buildCodexPreviewMetadata();
+            buildCodexAtlasIntoCanvas(els.canvas, "preview");
+            buildCodexPreviewMetadata("preview");
             updateStats();
             log("Codex preview built from detected source cells.", "ok");
           } else {
@@ -2832,7 +2832,7 @@ Codex pet workflow:
           );
         }
 
-        function buildCodexAtlasIntoCanvas(targetCanvas) {
+        function buildCodexAtlasIntoCanvas(targetCanvas, mode = "export") {
           targetCanvas.width = CODEX_WIDTH;
           targetCanvas.height = CODEX_HEIGHT;
           const tctx = targetCanvas.getContext("2d", {
@@ -2849,7 +2849,10 @@ Codex pet workflow:
 
             const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
             const boxes = getItemFrameBoxes(item);
-            const outputFrames = Math.min(codexState.frames, boxes.length);
+            const outputFrames =
+              mode === "preview"
+                ? boxes.length
+                : Math.min(codexState.frames, boxes.length);
             const effectiveBoxes = getEffectiveCellBoxes(item, boxes);
             const sourceFrames = Array.from(
               { length: outputFrames },
@@ -2882,7 +2885,7 @@ Codex pet workflow:
           }
         }
 
-        function buildCodexPreviewMetadata() {
+        function buildCodexPreviewMetadata(mode = "export") {
           state.metadata = [];
 
           for (let row = 0; row < CODEX_ROWS; row++) {
@@ -2902,7 +2905,10 @@ Codex pet workflow:
             const cleanedStrip = makeCleanCanvasFromBitmap(item.bitmap);
             const boxes = getItemFrameBoxes(item);
             const effectiveBoxes = getEffectiveCellBoxes(item, boxes);
-            const outputFrames = Math.min(codexState.frames, boxes.length);
+            const outputFrames =
+              mode === "preview"
+                ? boxes.length
+                : Math.min(codexState.frames, boxes.length);
             const sourceFrames = Array.from(
               { length: outputFrames },
               (_, col) =>
