@@ -608,9 +608,8 @@
       }
 
       .mask-dialog {
-        width: min(900px, calc(100vw - 24px));
-        max-width: 900px;
-        max-height: calc(100vh - 24px);
+        width: min(1100px, calc(100vw - 32px));
+        max-width: 1100px;
       }
 
       .mask-toolbar {
@@ -649,9 +648,7 @@
       #maskCanvas {
         cursor: crosshair;
         display: block;
-        width: 100%;
         height: auto;
-        max-width: 100%;
       }
 
       .warn-inline {
@@ -1322,15 +1319,23 @@ Codex pet workflow:
           const issues = [];
 
           if (state.items.length > CODEX_ROWS) {
-            issues.push(`only the first ${CODEX_ROWS} strips map to Codex rows`);
+            issues.push(
+              `only the first ${CODEX_ROWS} strips map to Codex rows`,
+            );
           }
 
-          for (let row = 0; row < Math.min(state.items.length, CODEX_ROWS); row++) {
+          for (
+            let row = 0;
+            row < Math.min(state.items.length, CODEX_ROWS);
+            row++
+          ) {
             const item = state.items[row];
             const expected = CODEX_STATES[row].frames;
             const actual = getItemFrameBoxes(item).length;
             if (actual !== expected) {
-              issues.push(`${CODEX_STATES[row].label} expects ${expected}, current strip has ${actual}`);
+              issues.push(
+                `${CODEX_STATES[row].label} expects ${expected}, current strip has ${actual}`,
+              );
             }
           }
 
@@ -1657,9 +1662,7 @@ Codex pet workflow:
             );
 
             const codexState = CODEX_STATES[index];
-            const usedFrames = codexState
-              ? getItemFrameBoxes(item).length
-              : 0;
+            const usedFrames = codexState ? getItemFrameBoxes(item).length : 0;
             const detectedFrames = getItemFrameBoxes(item).length;
             const codexText = codexState
               ? `<strong>${index + 1}. ${codexState.label}</strong> · ${detectedFrames} detected, ${usedFrames} in preview/export`
