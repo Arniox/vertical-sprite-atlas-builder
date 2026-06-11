@@ -2136,9 +2136,13 @@ Codex pet workflow:
           const transform = state.editPreviewTransform;
           if (!transform) return null;
           const rect = els.editPreview.getBoundingClientRect();
+          const scaleX = els.editPreview.width / Math.max(1, rect.width);
+          const scaleY = els.editPreview.height / Math.max(1, rect.height);
+          const canvasX = (e.clientX - rect.left) * scaleX;
+          const canvasY = (e.clientY - rect.top) * scaleY;
           return {
-            x: (e.clientX - rect.left - transform.x) / transform.scale,
-            y: (e.clientY - rect.top - transform.y) / transform.scale,
+            x: (canvasX - transform.x) / transform.scale,
+            y: (canvasY - transform.y) / transform.scale,
           };
         }
 
