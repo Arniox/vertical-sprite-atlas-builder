@@ -2324,9 +2324,12 @@ Codex pet workflow:
 
         function beginMaskStroke(e) {
           state.maskEdit.drawing = true;
-          els.maskCanvas.setPointerCapture(e.pointerId);
           const point = getMaskSourcePoint(e);
-          if (!isPointInsideItem(point, getEditingItem())) return;
+          if (!isPointInsideItem(point, getEditingItem())) {
+            state.maskEdit.drawing = false;
+            return;
+          }
+          els.maskCanvas.setPointerCapture(e.pointerId);
           state.maskEdit.activeStroke = {
             cellIndex: state.selectedCellIndex,
             mode: state.maskEdit.mode,
