@@ -2,6 +2,8 @@
 
 A tiny browser-only sprite strip atlas builder that is ready for GitHub Pages.
 
+[Sprite Atlas Builder](https://arniox.github.io/vertical-sprite-atlas-builder/)
+
 ## What it does
 
 - Drag/drop unlimited sprite strips or sheets.
