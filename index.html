@@ -575,6 +575,13 @@
           -8px 0px;
       }
 
+      .mini-checker canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-width: 100%;
+      }
+
       .cell-edit-toast {
         position: sticky;
         top: 0;
@@ -601,8 +608,9 @@
       }
 
       .mask-dialog {
-        width: min(1100px, calc(100vw - 32px));
-        max-width: 1100px;
+        width: min(900px, calc(100vw - 24px));
+        max-width: 900px;
+        max-height: calc(100vh - 24px);
       }
 
       .mask-toolbar {
@@ -640,6 +648,10 @@
 
       #maskCanvas {
         cursor: crosshair;
+        display: block;
+        width: 100%;
+        height: auto;
+        max-width: 100%;
       }
 
       .codex-order {
@@ -1611,8 +1623,9 @@ Codex pet workflow:
             const usedFrames = codexState
               ? Math.min(codexState.frames, getItemFrameBoxes(item).length)
               : 0;
+            const detectedFrames = getItemFrameBoxes(item).length;
             const codexText = codexState
-              ? `<strong>${index + 1}. ${codexState.label}</strong> · ${usedFrames} source cells`
+              ? `<strong>${index + 1}. ${codexState.label}</strong> · ${detectedFrames} detected, ${usedFrames} used for Codex`
               : `<span class="warn">Ignored by Codex export</span>`;
 
             const meta = document.createElement("div");
@@ -1974,7 +1987,7 @@ Codex pet workflow:
             state.selectedCellIndex,
           );
           els.editCodexState.textContent = codexState
-            ? `Position ${index + 1}: ${codexState.label} (${Math.min(codexState.frames, boxes.length)} source cells)`
+            ? `Position ${index + 1}: ${codexState.label} (${boxes.length} detected, ${Math.min(codexState.frames, boxes.length)} used for Codex)`
             : "Not used; Codex export only uses the first 9 loaded strips.";
           drawItemDialogPreview(item);
         }
