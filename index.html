@@ -1182,6 +1182,7 @@ Codex pet workflow:
           clearBtn: $("clearBtn"),
           helpBtn: $("helpBtn"),
           downloadBtn: $("downloadBtn"),
+          codexWarning: $("codexWarning"),
           downloadJsonBtn: $("downloadJsonBtn"),
           layoutMode: $("layoutMode"),
           alignMode: $("alignMode"),
@@ -1312,7 +1313,36 @@ Codex pet workflow:
           els.normalizeEnabledLabel.hidden = hideNormalize;
           els.normalizeTargetLabel.hidden = hideNormalize;
           els.customNormalizeLabel.hidden = hideNormalize;
+          updateCodexWarning();
           updateStats();
+        }
+
+        function getCodexComplianceIssues() {
+          if (!isCodexExportMode()) return [];
+          const issues = [];
+
+          if (state.items.length > CODEX_ROWS) {
+            issues.push(`only the first ${CODEX_ROWS} strips map to Codex rows`);
+          }
+
+          for (let row = 0; row < Math.min(state.items.length, CODEX_ROWS); row++) {
+            const item = state.items[row];
+            const expected = CODEX_STATES[row].frames;
+            const actual = getItemFrameBoxes(item).length;
+            if (actual !== expected) {
+              issues.push(`${CODEX_STATES[row].label} expects ${expected}, current strip has ${actual}`);
+            }
+          }
+
+          return issues;
+        }
+
+        function updateCodexWarning() {
+          const issues = getCodexComplianceIssues();
+          els.codexWarning.hidden = issues.length === 0;
+          els.codexWarning.textContent = issues.length
+            ? `Codex warning: ${issues[0]}`
+            : "";
         }
 
         function syncBusy() {
@@ -2644,15 +2674,17 @@ Codex pet workflow:
           }
 
           if (isCodexExportMode()) {
-            buildCodexAtlasIntoCanvas(els.canvas, "preview");
-            buildCodexPreviewMetadata("preview");
+            buildCodexAtlasIntoCanvas(els.canvas);
+            buildCodexPreviewMetadata();
             updateStats();
+            updateCodexWarning();
             log("Codex preview built from detected source cells.", "ok");
           } else {
             const processed = state.items.map(processBaseItem);
             const normalized = normalizeItems(processed);
             const transformed = normalized.map(applyItemTransform);
             buildNormalAtlas(transformed);
+            updateCodexWarning();
           }
 
           els.downloadBtn.disabled = false;
