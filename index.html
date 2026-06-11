@@ -2394,11 +2394,9 @@ Codex pet workflow:
             r: Number(mask.r) || 10,
             points: Array.isArray(mask.points)
               ? mask.points.map((p) => ({ x: Number(p.x), y: Number(p.y) }))
-              : Array.isArray(mask.x) && Array.isArray(mask.y)
+              : Number.isFinite(mask.x) && Number.isFinite(mask.y)
                 ? [{ x: Number(mask.x), y: Number(mask.y) }]
-                : Number.isFinite(mask.x) && Number.isFinite(mask.y)
-                  ? [{ x: Number(mask.x), y: Number(mask.y) }]
-                  : [],
+                : [],
           }));
         }
 
