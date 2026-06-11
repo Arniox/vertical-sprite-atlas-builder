@@ -3114,7 +3114,7 @@ Codex pet workflow:
               row,
               state: codexState.name,
               label: codexState.label,
-              usedFrames: Math.min(codexState.frames, getItemFrameBoxes(item).length),
+              usedFrames: getItemFrameBoxes(item).length,
               maxFrames: CODEX_COLS,
               expectedFrames: codexState.frames,
               sourceFrames: getItemFrameBoxes(item).length,
