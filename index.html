@@ -1609,7 +1609,7 @@ Codex pet workflow:
 
             const codexState = CODEX_STATES[index];
             const usedFrames = codexState
-              ? Math.min(CODEX_COLS, getItemFrameBoxes(item).length)
+              ? Math.min(codexState.frames, getItemFrameBoxes(item).length)
               : 0;
             const codexText = codexState
               ? `<strong>${index + 1}. ${codexState.label}</strong> · ${usedFrames} source cells`
@@ -1974,7 +1974,7 @@ Codex pet workflow:
             state.selectedCellIndex,
           );
           els.editCodexState.textContent = codexState
-            ? `Position ${index + 1}: ${codexState.label} (${Math.min(CODEX_COLS, boxes.length)} source cells)`
+            ? `Position ${index + 1}: ${codexState.label} (${Math.min(codexState.frames, boxes.length)} source cells)`
             : "Not used; Codex export only uses the first 9 loaded strips.";
           drawItemDialogPreview(item);
         }
